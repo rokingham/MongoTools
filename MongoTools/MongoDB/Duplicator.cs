@@ -20,11 +20,18 @@ namespace MongoDB
         /// <param name="duplicationSuffix">Suffix that wil be appended to the name of the collection, when duplicated</param>
         public static void CollectionsDuplicate (MongoDatabase database, Lazy<List<String>> collectionsToDuplicate, int insertBatchSize = 100, bool copyIndexes = true, string duplicationSuffix = "_COPY")
         {
-            // Iterating over name of the collections received
-            foreach (var collectionName in collectionsToDuplicate.Value)
+            // Parallel Options
+            var multiThreadingOptions = new ParallelOptions () { MaxDegreeOfParallelism = System.Environment.ProcessorCount * 2};
+
+            // Multi-threading Processing of each duplicate request
+            Parallel.ForEach (collectionsToDuplicate.Value, multiThreadingOptions, collectionName =>
             {
+                // Console Feedback
+                Console.WriteLine ("Duplicating Collection : " + collectionName);
+
+                // Duplication Method
                 SharedMethods.DuplicateCollection (database, collectionName, duplicationSuffix, insertBatchSize, copyIndexes);
-            }
+            });
         }
 
         /// <summary>
@@ -38,10 +45,18 @@ namespace MongoDB
         /// <param name="duplicationSuffix">Suffix that wil be appended to the name of the collection, when duplicated</param>
         public static void CollectionsDuplicate (MongoDatabase database, String collectionsNameMask, int insertBatchSize = 100, bool copyIndexes = true, string duplicationSuffix = "_COPY")
         {
-            foreach (var collection in database.GetCollectionNames ().Where (t => t.Contains (collectionsNameMask)))
+            // Parallel Options
+            var multiThreadingOptions = new ParallelOptions () { MaxDegreeOfParallelism = System.Environment.ProcessorCount * 2};
+
+            // Multi-threading Processing of each duplicate request
+            Parallel.ForEach (database.GetCollectionNames ().Where (t => t.Contains (collectionsNameMask)), multiThreadingOptions, collectionName =>
             {
-                SharedMethods.DuplicateCollection (database, collection, duplicationSuffix, insertBatchSize, copyIndexes);
-            }
+                // Console Feedback
+                Console.WriteLine ("Duplicating Collection : " + collectionName);
+
+                // Duplication Method
+                SharedMethods.DuplicateCollection (database, collectionName, duplicationSuffix, insertBatchSize, copyIndexes);
+            });
         }
     }
 }

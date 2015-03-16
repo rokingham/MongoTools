@@ -20,11 +20,17 @@ namespace MongoDB
         /// <param name="copyIndexes">True if the indexes should be copied aswell, false otherwise</param>
         public static void DatabaseCopy (MongoDatabase sourceDatabase, MongoDatabase targetDatabase, int insertBatchSize = 100, bool copyIndexes = true, bool dropCollections = false)
         {
-            // Copying All (Non 'System') Collections
-            foreach (var collection in sourceDatabase.GetCollectionNames ().ToList ())
+            // Parallel Options
+            var multiThreadingOptions = new ParallelOptions () { MaxDegreeOfParallelism = System.Environment.ProcessorCount * 2 };
+
+            // Multi-threading Processing of each copy request
+            Parallel.ForEach (sourceDatabase.GetCollectionNames (), multiThreadingOptions, collectionName =>
             {
-                SharedMethods.CopyCollection (sourceDatabase, targetDatabase, collection, insertBatchSize, copyIndexes, dropCollections);
-            }
+                // Console Feedback
+                Console.WriteLine ("Migrating Collection : " + collectionName);
+
+                SharedMethods.CopyCollection (sourceDatabase, targetDatabase, collectionName, insertBatchSize, copyIndexes, dropCollections);
+            });
         }
 
         /// <summary>
@@ -37,11 +43,17 @@ namespace MongoDB
         /// <param name="copyIndexes">True if the indexes should be copied aswell, false otherwise</param>
         public static void CollectionsCopy (MongoDatabase sourceDatabase, MongoDatabase targetDatabase, Lazy<List<String>> collectionsToCopy, int insertBatchSize = 100, bool copyIndexes = true, bool dropCollections = false)
         {
-            // Copying All Collections Received as parameter
-            foreach (var collection in collectionsToCopy.Value)
+             // Parallel Options
+            var multiThreadingOptions = new ParallelOptions () { MaxDegreeOfParallelism = System.Environment.ProcessorCount * 2 };
+
+            // Multi-threading Processing of each copy request
+            Parallel.ForEach (collectionsToCopy.Value, multiThreadingOptions, collectionName =>
             {
-                SharedMethods.CopyCollection (sourceDatabase, targetDatabase, collection, insertBatchSize, copyIndexes, dropCollections);
-            }
+                // Console Feedback
+                Console.WriteLine ("Migrating Collection : " + collectionName);
+
+                SharedMethods.CopyCollection (sourceDatabase, targetDatabase, collectionName, insertBatchSize, copyIndexes, dropCollections);
+            });
         }
 
         /// <summary>
@@ -54,11 +66,17 @@ namespace MongoDB
         /// <param name="copyIndexes">True if the indexes should be copied aswell, false otherwise</param>
         public static void CollectionsCopy (MongoDatabase sourceDatabase, MongoDatabase targetDatabase, String collectionsNameMask, int insertBatchSize = 100, bool copyIndexes = true, bool dropCollections = false)
         {
-            // Copying All Collections Received as parameter
-            foreach (var collection in sourceDatabase.GetCollectionNames ().Where (t => t.Contains (collectionsNameMask)))
+             // Parallel Options
+            var multiThreadingOptions = new ParallelOptions () { MaxDegreeOfParallelism = System.Environment.ProcessorCount * 2 };
+
+            // Multi-threading Processing of each copy request
+            Parallel.ForEach (sourceDatabase.GetCollectionNames ().Where (t => t.Contains (collectionsNameMask)), multiThreadingOptions, collectionName =>
             {
-                SharedMethods.CopyCollection (sourceDatabase, targetDatabase, collection, insertBatchSize, copyIndexes, dropCollections);
-            }
+                // Console Feedback
+                Console.WriteLine ("Migrating Collection : " + collectionName);
+
+                SharedMethods.CopyCollection (sourceDatabase, targetDatabase, collectionName, insertBatchSize, copyIndexes, dropCollections);
+            });
         }
     }
 }

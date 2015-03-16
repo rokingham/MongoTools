@@ -70,10 +70,8 @@ namespace Duplicate
                 break;
             }
 
-            Console.WriteLine ("Copy Finished");
+            Console.WriteLine ("Duplication Finished");
             Console.ReadLine ();
-
-            Console.WriteLine ("Migrating Data");
         }
 
         /// <summary>
