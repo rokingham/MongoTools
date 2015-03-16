@@ -34,7 +34,7 @@ using System.Threading.Tasks;
 
 namespace Migrate
 {
-    class Program
+    class Migrate
     {
         // Mongo Related Attributes
         private static string _sourceServer;
@@ -113,7 +113,7 @@ namespace Migrate
         }
 
         /// <summary>
-        /// Loads the configuration values from the App.Config file
+        /// Loads Configuration from the App.Config file
         /// </summary>
         private static void LoadConfiguration()
         {
@@ -128,6 +128,9 @@ namespace Migrate
            _insertBatchSize    = Int32.Parse (ConfigurationManager.AppSettings["insertBatchSize"]);
         }
 
+        /// <summary>
+        /// Prints the Help menu for this Tool
+        /// </summary>
         private static void PrintHelp ()
         {
             Console.WriteLine ("***********************************");
@@ -141,6 +144,10 @@ namespace Migrate
             Console.WriteLine ("***********************************");
         }
 
+        /// <summary>
+        /// Parses out the Arguments received from the "CLI"
+        /// </summary>
+        /// <param name="args">Array of arguments received from the "CLI"</param>
         private static void ParseArguments (string[] args)
         {
             // Checking whether the Args.FULL_COPY parameter was received, with no other "collection" parameter set to true
@@ -208,6 +215,13 @@ namespace Migrate
             }
         }
 
+        /// <summary>
+        /// Gets the Index of the received argument (by key) within
+        /// the array of arguments
+        /// </summary>
+        /// <param name="args">Array of Arguments</param>
+        /// <param name="argName">Key (name) of the argument searched</param>
+        /// <returns>Index of the argument within array. -1 if not found</returns>
         private static int GetArgumentIndex (string[] args, string argName)
         {
             for (int i = 0 ; i <= args.Count() ; i++)

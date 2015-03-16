@@ -156,6 +156,7 @@ namespace MongoDB
             cb.Username = login;
             cb.Password = password;
             cb.ConnectionMode = MongoDB.Driver.ConnectionMode.Automatic;
+            cb.DatabaseName   = databaseName;
             cb.W = safeMode ? WriteConcern.W1.W : WriteConcern.Unacknowledged.W;
 
             if (connectionTimeoutMilliseconds < 15000) connectionTimeoutMilliseconds = 15000;
