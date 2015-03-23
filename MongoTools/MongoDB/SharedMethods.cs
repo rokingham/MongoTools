@@ -14,12 +14,12 @@ namespace MongoDB
         /// <summary>
         /// Copies a certain collection from one database to the other, including Indexes
         /// </summary>
-        /// <param name="olddb"></param>
-        /// <param name="newdb"></param>
+        /// <param name="sourceDatabase"></param>
+        /// <param name="targetDatabase"></param>
         /// <param name="buffer"></param>
-        /// <param name="col"></param>
+        /// <param name="collection"></param>
         /// <param name="insertBatchSize"></param>
-        public static void CopyCollection (MongoDatabase olddb, MongoDatabase newdb, string col, int insertBatchSize, bool copyIndexes, bool dropCollections)
+        public static void CopyCollection (MongoDatabase sourceDatabase, MongoDatabase targetDatabase, string collection, int insertBatchSize, bool copyIndexes, bool dropCollections)
         {
             // Local Buffer
             List<BsonDocument> buffer = new List<BsonDocument> (insertBatchSize);
@@ -28,8 +28,8 @@ namespace MongoDB
             int count = 0;
 
             // Reaching Collections
-            var sourceCollection = olddb.GetCollection (col);
-            var targetCollection = newdb.GetCollection (col);
+            var sourceCollection = sourceDatabase.GetCollection (collection);
+            var targetCollection = targetDatabase.GetCollection (collection);
 
             // Checking for the need to drop the collection before adding data to it
             if (dropCollections)
@@ -46,7 +46,7 @@ namespace MongoDB
             }
 
             // Running Copy
-            foreach (BsonDocument i in sourceCollection.Find (query).SetSortOrder ("_id"))
+            foreach (BsonDocument i in sourceCollection.Find (query))
             {
                 // Feedback and Local Buffer
                 count++;
@@ -56,18 +56,37 @@ namespace MongoDB
                 // Dumping data to database every 'X' records
                 if (buffer.Count >= insertBatchSize)
                 {
-                    targetCollection.InsertBatch (buffer);
-                    buffer.Clear ();
-                    Console.WriteLine ("progress {0}.{1} : {2} ", olddb.Name, col, count);
+                    try
+                    {
+                        targetCollection.InsertBatch (buffer);
+                        buffer.Clear ();
+                        Console.WriteLine ("progress {0}.{1} : {2} ", sourceDatabase.Name, collection, count);
+                    }
+                    catch (Exception ex)
+                    {
+                        buffer.Clear ();
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine (ex);
+                        Console.ForegroundColor = ConsoleColor.White;
+                    }
                 }
             }
 
             // Copying Remaining of Local Buffer
             if (buffer.Count > 0)
             {
-                targetCollection.InsertBatch (buffer);
-                buffer.Clear ();
-                Console.WriteLine ("progress {0}.{1} : {2} ", olddb.Name, col, count);
+                try
+                {
+                    targetCollection.InsertBatch (buffer);
+                    buffer.Clear ();
+                    Console.WriteLine ("progress {0}.{1} : {2} ", sourceDatabase.Name, collection, count);
+                }
+                catch (Exception ex)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine (ex);
+                    Console.ForegroundColor = ConsoleColor.White;
+                }
             }
 
             // Checkign for the need to copy indexes aswell
@@ -126,20 +145,35 @@ namespace MongoDB
                 buffer.Add (i);
 
                 // Dumping data to database every 'X' records
-                if (buffer.Count >= insertBatchSize)
+                try
                 {
                     targetCollection.InsertBatch (buffer);
                     buffer.Clear ();
                     Console.WriteLine ("progress {0}.{1} : {2} ", database.Name, collection, count);
+                }
+                catch (Exception ex)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine (ex);
+                    Console.ForegroundColor = ConsoleColor.White;
                 }
             }
 
             // Copying Remaining of Local Buffer
             if (buffer.Count > 0)
             {
-                targetCollection.InsertBatch (buffer);
-                buffer.Clear ();
-                Console.WriteLine ("progress {0}.{1} : {2} ", database.Name, collection, count);
+                try
+                {
+                    targetCollection.InsertBatch (buffer);
+                    buffer.Clear ();
+                    Console.WriteLine ("progress {0}.{1} : {2} ", database.Name, collection, count);
+                }
+                catch (Exception ex)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine (ex);
+                    Console.ForegroundColor = ConsoleColor.White;
+                }
             }
 
             // Checkign for the need to copy indexes aswell

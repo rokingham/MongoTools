@@ -80,8 +80,8 @@ namespace Migrate
             Console.WriteLine ("Reaching Databases");
 
             // Building Connection Strings
-            String sourceConnString = MongoDbContext.BuildConnectionString (_sourceUsername, _sourcePassword, _sourceServer);
-            String targetConnString = MongoDbContext.BuildConnectionString (_targetUsername, _targetPassword, _targetServer);
+            String sourceConnString = MongoDbContext.BuildConnectionString (_sourceUsername, _sourcePassword, _sourceServer, _sourceDatabaseName);
+            String targetConnString = MongoDbContext.BuildConnectionString (_targetUsername, _targetPassword, _targetServer, _targetDatabaseName);
 
             // Reaching Databases
             MongoDatabase sourceDatabase = MongoDbContext.GetServer (sourceConnString).GetDatabase (_sourceDatabaseName);
