@@ -12,6 +12,7 @@ namespace Duplicate
     class Duplicate
     {
         // Mongo Related Attributes
+        private static string _authDatabaseName;
         private static string _sourceServer;
         private static string _sourceUsername;
         private static string _sourcePassword;
@@ -51,7 +52,7 @@ namespace Duplicate
             Console.WriteLine ("Reaching Database");
 
             // Building Connection Strings
-            String sourceConnString      = MongoDbContext.BuildConnectionString (_sourceUsername, _sourcePassword, _sourceServer, _sourceDatabaseName);
+            String sourceConnString      = MongoDbContext.BuildConnectionString (_sourceUsername, _sourcePassword, _sourceServer, _authDatabaseName);
 
             // Reaching Database
             MongoDatabase sourceDatabase = MongoDbContext.GetServer (sourceConnString).GetDatabase (_sourceDatabaseName);
@@ -79,6 +80,7 @@ namespace Duplicate
         /// </summary>
         private static void LoadConfiguration()
         {
+           _authDatabaseName   = ConfigurationManager.AppSettings["authDatabaseName"];
            _sourceServer       = ConfigurationManager.AppSettings["sourceServer"  ];
            _sourceUsername     = ConfigurationManager.AppSettings["sourceUsername"];
            _sourcePassword     = ConfigurationManager.AppSettings["sourcePassword"];

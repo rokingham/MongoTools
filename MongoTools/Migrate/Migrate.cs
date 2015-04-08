@@ -37,6 +37,8 @@ namespace Migrate
     class Migrate
     {
         // Mongo Related Attributes
+        private static string _authDatabaseNameSource;
+        private static string _authDatabaseNameTarget;
         private static string _sourceServer;
         private static string _sourceUsername;
         private static string _sourcePassword;
@@ -80,8 +82,8 @@ namespace Migrate
             Console.WriteLine ("Reaching Databases");
 
             // Building Connection Strings
-            String sourceConnString = MongoDbContext.BuildConnectionString (_sourceUsername, _sourcePassword, _sourceServer, _sourceDatabaseName);
-            String targetConnString = MongoDbContext.BuildConnectionString (_targetUsername, _targetPassword, _targetServer, _targetDatabaseName);
+            String sourceConnString = MongoDbContext.BuildConnectionString (_sourceUsername, _sourcePassword, _sourceServer, _authDatabaseNameSource);
+            String targetConnString = MongoDbContext.BuildConnectionString (_targetUsername, _targetPassword, _targetServer, _authDatabaseNameTarget);
 
             // Reaching Databases
             MongoDatabase sourceDatabase = MongoDbContext.GetServer (sourceConnString).GetDatabase (_sourceDatabaseName);
@@ -117,15 +119,17 @@ namespace Migrate
         /// </summary>
         private static void LoadConfiguration()
         {
-           _sourceServer       = ConfigurationManager.AppSettings["sourceServer"  ];
-           _sourceUsername     = ConfigurationManager.AppSettings["sourceUsername"];
-           _sourcePassword     = ConfigurationManager.AppSettings["sourcePassword"];
-           _targetServer       = ConfigurationManager.AppSettings["targetServer"  ];
-           _targetUsername     = ConfigurationManager.AppSettings["targetUsername"];
-           _targetPassword     = ConfigurationManager.AppSettings["targetPassword"];
-           _targetDatabaseName = ConfigurationManager.AppSettings["targetDatabaseName"];
-           _sourceDatabaseName = ConfigurationManager.AppSettings["sourceDatabaseName"];
-           _insertBatchSize    = Int32.Parse (ConfigurationManager.AppSettings["insertBatchSize"]);
+           _authDatabaseNameSource = ConfigurationManager.AppSettings["authDatabaseNameSource"];
+           _authDatabaseNameTarget = ConfigurationManager.AppSettings["authDatabaseNameTarget"];
+           _sourceServer           = ConfigurationManager.AppSettings["sourceServer"  ];
+           _sourceUsername         = ConfigurationManager.AppSettings["sourceUsername"];
+           _sourcePassword         = ConfigurationManager.AppSettings["sourcePassword"];
+           _targetServer           = ConfigurationManager.AppSettings["targetServer"  ];
+           _targetUsername         = ConfigurationManager.AppSettings["targetUsername"];
+           _targetPassword         = ConfigurationManager.AppSettings["targetPassword"];
+           _targetDatabaseName     = ConfigurationManager.AppSettings["targetDatabaseName"];
+           _sourceDatabaseName     = ConfigurationManager.AppSettings["sourceDatabaseName"];
+           _insertBatchSize        = Int32.Parse (ConfigurationManager.AppSettings["insertBatchSize"]);
         }
 
         /// <summary>
