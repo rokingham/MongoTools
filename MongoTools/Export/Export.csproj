@@ -48,6 +48,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Args.cs" />
     <Compile Include="Export.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
