@@ -154,6 +154,13 @@ namespace Export
 
         private static bool ValidateArgs (string[] args)
         {
+            // If there are "3" arguments, the export type MUST BE "CSV".
+            // If there are "2" arguments, the export type MUST BE "JSON"
+            if (args.Length != 2 && args.Length != 3)
+            {
+                return false; // Arguments Error
+            }
+
             // Saving Collection Value
             _mongoCollection = args[0];
 
@@ -163,11 +170,11 @@ namespace Export
             // Checking whether the third value is either CSV or JSON
             string format    = args[2].ToUpper();
 
-            if (format.Equals ("CSV"))
+            if (format.Equals ("CSV") && args.Length == 3)
             {
                 _exportFormat = ExportFormat.CSV;
             }
-            else if (format.Equals ("JSON"))
+            else if (format.Equals ("JSON") && args.Length == 2)
             {
                 _exportFormat = ExportFormat.JSON;
             }
