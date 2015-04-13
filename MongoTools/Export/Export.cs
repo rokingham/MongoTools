@@ -16,6 +16,9 @@ namespace Export
 {
     class Export
     {
+        // Enum of Possible "Export Formats"
+        private enum ExportFormat { JSON = 0, CSV }
+
         // Mongo Related Attributes
         private static string _sourceServer;
         private static string _sourceDatabase;
@@ -26,15 +29,16 @@ namespace Export
         private static string _mongoCollection;
 
         // Export Config
-        private static string _layoutPath;
-        private static string _outputFile;
+        private static string       _layoutPath;
+        private static string       _outputFile;
+        private static ExportFormat _exportFormat;
 
         static void Main (string[] args)
         {
             // Args Sanity Check
-            if (args == null || args.Length != 2)
+            if (args == null || args.Length != 3)
             {
-                Console.WriteLine ("Incorrect number of arguments received. Expected between 1 and 2");
+                Console.WriteLine ("Incorrect number of arguments received. Expected 3");
                 System.Environment.Exit (-101);
             }
             
@@ -89,20 +93,31 @@ namespace Export
                 // Auto Flush
                 fWriter.AutoFlush = true;
 
+                // Output File Line
+                string fileLine = String.Empty;
+
                 // Iterating over documents found using the query
                 foreach (BsonDocument document in cursor)
                 {
-                    // Extracting data from it
-                    string csvLine = JsonToCSV.Convert (document);
+                    // Picking which export method will be used
+                    if (_exportFormat == ExportFormat.CSV)
+                    {
+                        // Extracting data from it
+                        fileLine = JsonToCSV.Convert (document);
+                    }
+                    else
+                    {
+                        fileLine = document.ToString ();
+                    }
 
                     // Checking for errors
-                    if (String.IsNullOrWhiteSpace (csvLine))
+                    if (String.IsNullOrWhiteSpace (fileLine))
                     {
                         continue;
                     }
 
                     // Writing to output csv
-                    fWriter.WriteLine (csvLine);
+                    fWriter.WriteLine (fileLine);
 
                     // Counting
                     if (recordsProcessed++ % 100 == 0)
@@ -139,17 +154,27 @@ namespace Export
 
         private static bool ValidateArgs (string[] args)
         {
-            // Null / Length Check
-            if (args == null || args.Length < 2)
-            {
-                return false;
-            }
-
             // Saving Collection Value
             _mongoCollection = args[0];
 
             // Saving Path of XML Config/Layout for the Export
             _layoutPath      = args[1];
+
+            // Checking whether the third value is either CSV or JSON
+            string format    = args[2].ToUpper();
+
+            if (format.Equals ("CSV"))
+            {
+                _exportFormat = ExportFormat.CSV;
+            }
+            else if (format.Equals ("JSON"))
+            {
+                _exportFormat = ExportFormat.JSON;
+            }
+            else // Wrong value of format received
+            {
+                return false; 
+            }
 
             // OK
             return true;
