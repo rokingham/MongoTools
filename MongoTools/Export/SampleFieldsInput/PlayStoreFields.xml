@@ -26,6 +26,10 @@
 		<Mandatory>true</Mandatory>
 	</Field>
 	<Field>
+		<Name>PublicationDate</Name>
+		<Mandatory>true</Mandatory>
+	</Field>
+	<Field>
 		<Name>Category</Name>
 		<Mandatory>false</Mandatory>
 	</Field>

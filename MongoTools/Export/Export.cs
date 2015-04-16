@@ -2,6 +2,7 @@
 using CSVReflection.Configuration;
 using MongoDB;
 using MongoDB.Bson;
+using MongoDB.Bson.IO;
 using MongoDB.Driver;
 using System;
 using System.Collections.Generic;
@@ -121,7 +122,10 @@ namespace Export
             
             // Counters
             int recordsProcessed = 0;
-            
+
+            // JSON Settings to keep the "JSON" output as "Strict"
+            var jsonSettings = new JsonWriterSettings () { OutputMode = JsonOutputMode.Strict };
+
             // File Writer
             using (StreamWriter fWriter = new StreamWriter (_outputFile, false, Encoding.UTF8))
             {
@@ -142,7 +146,7 @@ namespace Export
                     }
                     else
                     {
-                        fileLine = document.ToString ();
+                        fileLine = document.ToJson (jsonSettings);
                     }
 
                     // Checking for errors
