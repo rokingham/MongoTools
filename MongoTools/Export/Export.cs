@@ -32,6 +32,8 @@ namespace Export
         // Export Config
         private static string       _layoutPath;
         private static string       _outputFile;
+        private static int          _limit;
+        private static bool         _addHeaders;
         private static ExportFormat _exportFormat;
 
         static void Main (string[] args)
@@ -119,6 +121,12 @@ namespace Export
             // Setting up MongoDB Cursor
             MongoCursor cursor = sourceDatabase.GetCollection<BsonDocument> (_mongoCollection).Find (query);
             cursor.SetFlags (QueryFlags.NoCursorTimeout);
+
+            // Checking for the need to apply limit
+            if (_limit != -1)
+            {
+                cursor.SetLimit (_limit);
+            }
             
             // Counters
             int recordsProcessed = 0;
@@ -135,6 +143,13 @@ namespace Export
                 // Output File Line
                 string fileLine = String.Empty;
 
+                // Should we add headers to the output CSV file?
+                if (_exportFormat == ExportFormat.CSV && _addHeaders)
+                {
+                    // Writing Headers
+                    fWriter.WriteLine (JsonToCSV.Fields);
+                }
+
                 // Iterating over documents found using the query
                 foreach (BsonDocument document in cursor)
                 {
@@ -142,7 +157,7 @@ namespace Export
                     if (_exportFormat == ExportFormat.CSV)
                     {
                         // Extracting data from it
-                        fileLine = JsonToCSV.Convert (document);
+                        fileLine = JsonToCSV.BsonToCSV (document);
                     }
                     else
                     {
@@ -167,6 +182,9 @@ namespace Export
             }
         }
 
+        /// <summary>
+        /// Reads the data out of the .Config file
+        /// </summary>
         private static void LoadConfiguration ()
         {
             _sourceServer       = ConfigurationManager.AppSettings["sourceServer"];
@@ -178,6 +196,10 @@ namespace Export
             _outputFile         = ConfigurationManager.AppSettings["outputCSV"];
         }
 
+        /// <summary>
+        /// Parses CLI arguments
+        /// </summary>
+        /// <param name="args">List of Args received by the CLI</param>
         private static void ParseArguments (string[] args)
         {
             // Reaching "Export Type" parameter
@@ -251,9 +273,36 @@ namespace Export
                     System.Environment.Exit (-101);
                 }
             }
-            
+
+            // Checking for "Limit" Parameter
+            if (args.Where (t => t.Equals (Args.EXPORT_LIMIT)).FirstOrDefault () != null)
+            {
+                // Reaching the index of the "Export-Limit" parameter received
+                int limitIndex = GetArgumentIndex (args, Args.EXPORT_LIMIT) + 1;
+
+                // Converting it to Int32
+                _limit = Convert.ToInt32 (args[limitIndex]);
+            }         
+            else // No Limit, Initializes it with -1
+            {
+                _limit = -1;
+            }
+
+            // Checking for the "AddHeaders" Parameter
+            if (args.Where (t => t.Equals (Args.ADD_HEADERS)).FirstOrDefault() != null)
+            {
+                _addHeaders = true;
+            }
+            else
+            {
+                _addHeaders = false;
+            }
         }
         
+        /// <summary>
+        /// Checks the minimum parameters of this application
+        /// </summary>
+        /// <returns></returns>
         private static bool ValidateConfig ()
         {
             if (String.IsNullOrEmpty (_sourceServer) 
@@ -267,6 +316,9 @@ namespace Export
             return true;
         }
 
+        /// <summary>
+        /// Prints the application parameters
+        /// </summary>
         private static void PrintHelp ()
         {
             Console.WriteLine ("***********************************");

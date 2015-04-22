@@ -10,6 +10,8 @@ namespace Export
     {
         public static readonly string FORMAT_PARAMETER   = "-format";
         public static readonly string COLLECTION_NAME    = "-collection";
+        public static readonly string EXPORT_LIMIT       = "-limit";
+        public static readonly string ADD_HEADERS        = "-add-headers";
         public static readonly string EXPORT_LAYOUT_PATH = "-export-config-path";
     }
 }
