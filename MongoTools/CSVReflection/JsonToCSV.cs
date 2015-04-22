@@ -61,15 +61,18 @@ namespace CSVReflection
             {
                 // Field Value placeholder
                 string fieldValue = String.Empty;
+
+                // Field Name Tmp (to avoid messing with the Object itself)
+                string fieldName = field.Name;
                                 
                 // Checking for the situation where the field is nested
-                if (field.Name.Contains ('.'))
+                if (fieldName.Contains ('.'))
                 {
                     // Retrieving value of this field. (E.G: Score.Total will return the value of the "Total" field, within the "Score" one)
-                    auxBsonDoc = ReachInnerDocument (bsonDocument, field.Name);
+                    auxBsonDoc = ReachInnerDocument (bsonDocument, fieldName);
 
                     // Changing the "Field.Name" value to it's botton one
-                    field.Name = field.Name.Split ('.').Last ();
+                    fieldName = fieldName.Split ('.').Last ();
                 }
                 else // Resetting "BsonDocument" reference
                 {
@@ -77,7 +80,7 @@ namespace CSVReflection
                 }
 
                 // Checking for "Field not found"
-                if (!auxBsonDoc.Contains (field.Name))
+                if (!auxBsonDoc.Contains (fieldName))
                 {
                     // Is this field mandatory ?
                     if (field.Mandatory)
@@ -94,7 +97,7 @@ namespace CSVReflection
                 else
                 {                                        
                     // Converting Field to it's proper type value
-                    fieldValue = BsonToType (auxBsonDoc, field.Name);
+                    fieldValue = BsonToType (auxBsonDoc, fieldName);
                 }
 
                 // Adding Key and Value to the dictionary
