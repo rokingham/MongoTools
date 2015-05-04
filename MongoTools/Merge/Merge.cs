@@ -32,9 +32,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Migrate
+namespace Merge
 {
-    class Migrate
+    class Merge
     {
         #region ** Attributes **
 
@@ -49,19 +49,18 @@ namespace Migrate
         private static string _targetPassword;
         private static string _targetDatabaseName;
         private static string _sourceDatabaseName;
+        private static string _targetCollectionName;
         private static int    _insertBatchSize;
 
         // Arguments
-        private static CopyMode           _copyMode;
-        private static bool               _copyIndexes;
-        private static bool               _dropCollections;
+        private static MergeMode          _mergeMode;
         private static Lazy<List<String>> _collections = new Lazy<List<String>> ();
 
         #endregion
 
         static void Main (string[] args)
         {
-            // Parameters Check
+             // Parameters Check
             if (args == null || args.Length == 0)
             {
                 // Error
@@ -82,7 +81,7 @@ namespace Migrate
 
             // Reading App Config
             LoadConfiguration ();
-
+            
             Console.WriteLine ("Reaching Databases");
 
             // Building Connection Strings
@@ -93,47 +92,29 @@ namespace Migrate
             MongoDatabase sourceDatabase = MongoDbContext.GetServer (sourceConnString).GetDatabase (_sourceDatabaseName);
             MongoDatabase targetDatabase = MongoDbContext.GetServer (targetConnString).GetDatabase (_targetDatabaseName);
 
-            Console.WriteLine ("Migrating Data");
+            Console.WriteLine ("Merging Data");
 
             // Picking which method to use
-            switch (_copyMode)
+            switch (_mergeMode)
             {
-                case CopyMode.FullDatabaseCopy:
-                    Console.WriteLine ("Copying Full Database");
-                    Migrator.DatabaseCopy (sourceDatabase, targetDatabase, _insertBatchSize, _copyIndexes, _dropCollections);                    
-                break;
+                case MergeMode.FullDatabaseMerge:
+                    Console.WriteLine ("Merging Full Database into Collection : " + _targetCollectionName);
+                    Merger.DatabaseMerge (sourceDatabase, targetDatabase, _targetCollectionName, _insertBatchSize);
+                    break;
 
-                case CopyMode.CollectionsCopy:
-                    Console.WriteLine ("Copying Collections from List");
-                    Migrator.CollectionsCopy (sourceDatabase, targetDatabase, _collections, _insertBatchSize, _copyIndexes, _dropCollections);                    
-                break;
+                case MergeMode.CollectionsMerge:
+                    Console.WriteLine ("Merging Collections from List, into Collection : " + _targetCollectionName);
+                    Merger.CollectionsMerge (sourceDatabase, targetDatabase, _targetCollectionName, _collections, _insertBatchSize);
+                    break;
 
-                case CopyMode.CollectionsMaskCopy:
-                    Console.WriteLine ("Copying Collections that matches : " + _collections.Value.First());
-                    Migrator.CollectionsCopy (sourceDatabase, targetDatabase, _collections.Value.First (), _insertBatchSize, _copyIndexes, _dropCollections);                    
-                break;
+                case MergeMode.CollectionsMaskMerge:
+                    Console.WriteLine ("Merging Collections that matches : " + _collections.Value.First () + " into Collection" + _targetCollectionName);
+                    Merger.CollectionsMerge (sourceDatabase, targetDatabase, _targetCollectionName, _collections.Value.First (), _insertBatchSize);
+                    break;
             }
 
-            Console.WriteLine ("Copy Finished");
+            Console.WriteLine ("Merge Finished");
             Console.ReadLine ();
-        }
-
-        /// <summary>
-        /// Loads Configuration from the App.Config file
-        /// </summary>
-        private static void LoadConfiguration()
-        {
-           _authDatabaseNameSource = ConfigurationManager.AppSettings["authDatabaseNameSource"];
-           _authDatabaseNameTarget = ConfigurationManager.AppSettings["authDatabaseNameTarget"];
-           _sourceServer           = ConfigurationManager.AppSettings["sourceServer"  ];
-           _sourceUsername         = ConfigurationManager.AppSettings["sourceUsername"];
-           _sourcePassword         = ConfigurationManager.AppSettings["sourcePassword"];
-           _targetServer           = ConfigurationManager.AppSettings["targetServer"  ];
-           _targetUsername         = ConfigurationManager.AppSettings["targetUsername"];
-           _targetPassword         = ConfigurationManager.AppSettings["targetPassword"];
-           _targetDatabaseName     = ConfigurationManager.AppSettings["targetDatabaseName"];
-           _sourceDatabaseName     = ConfigurationManager.AppSettings["sourceDatabaseName"];
-           _insertBatchSize        = Int32.Parse (ConfigurationManager.AppSettings["insertBatchSize"]);
         }
 
         /// <summary>
@@ -144,11 +125,10 @@ namespace Migrate
             Console.WriteLine ("***********************************");
             Console.WriteLine ("List of Parameters");
             Console.WriteLine ("\t-h : Shows Help");
-            Console.WriteLine ("\t-full : Copies full database");
-            Console.WriteLine ("\t-copy-indexes : Indexes will be copied if this is received");
+            Console.WriteLine ("\t-full : Merges all collections from the database, to the target one");
             Console.WriteLine ("\t-collections col1 col2 col3 : If received this will be used instead of full database copy");
-            Console.WriteLine ("\t-collections-mask : mask of the collection name");
-            Console.WriteLine ("\t-drop-collections: If received, will force drop into each collection before copying the data");
+            Console.WriteLine ("\t-collections-mask : mask of the collection names that should be merged into the target one");
+            Console.WriteLine ("\t-target : Name of the collection where the data will be merged to");
             Console.WriteLine ("***********************************");
         }
 
@@ -160,20 +140,20 @@ namespace Migrate
         {
             // Checking whether the Args.FULL_COPY parameter was received, with no other "collection" parameter set to true
             if ((args.Where (t => t.Equals (Args.FULL_COPY)).FirstOrDefault () != null)
-                           && ((args.Where (t => t.Contains (Args.COLLECTIONS_COPY)).FirstOrDefault () == null)))
+                         && ((args.Where (t => t.Contains (Args.COLLECTIONS_COPY)).FirstOrDefault () == null)))
             {
-                _copyMode = CopyMode.FullDatabaseCopy;
+                _mergeMode = MergeMode.FullDatabaseMerge;
             }
             else // If its not full copy, than, what it is ?
             {
                 // Is it Collections or Collections-Mask ? 
                 if (args.Where (t => t.Equals (Args.COLLECTIONS_COPY)).FirstOrDefault () != null)
                 {
-                    _copyMode = CopyMode.CollectionsCopy;
+                    _mergeMode = MergeMode.CollectionsMerge;
                 }
                 else if (args.Where (t => t.Equals (Args.COLLECTIONS_MASK)).FirstOrDefault () != null)
                 {
-                    _copyMode = CopyMode.CollectionsMaskCopy;
+                    _mergeMode = MergeMode.CollectionsMaskMerge;
                 }
                 else // If no parameter was set (neither "full", "collections" or "collections-mask", aborts)
                 {
@@ -182,21 +162,15 @@ namespace Migrate
                 }
             }
 
-            // Checking for index-copy parameter
-            _copyIndexes = (args.Where (t => t.Equals (Args.COPY_INDEXES)).FirstOrDefault () != null);
-
-            // Checking for drop-collections parameter
-            _dropCollections = (args.Where (t => t.Equals (Args.DROP_COLLECTIONS)).FirstOrDefault () != null);
-
             // Parsing the rest of the args based on the ones received
-            switch (_copyMode)
+            switch (_mergeMode)
             {
                 // Nothing more should be parsed
-                case CopyMode.FullDatabaseCopy:
+                case MergeMode.FullDatabaseMerge:
                 break;
 
                  // Parsing collection names after the argument
-                case CopyMode.CollectionsCopy:
+                case MergeMode.CollectionsMerge:
 
                     // Reading arguments for the collection names
                     int startIndex = GetArgumentIndex (args, Args.COLLECTIONS_COPY) + 1;
@@ -214,13 +188,44 @@ namespace Migrate
 
                 break;
 
-                case CopyMode.CollectionsMaskCopy:
+                case MergeMode.CollectionsMaskMerge:
 
                     startIndex = GetArgumentIndex (args, Args.COLLECTIONS_MASK);
                     _collections.Value.Add (args[startIndex + 1]);
 
                 break;
             }
+
+            // Have we received any TargetCollection parameter ?
+            if (args.Any (t => t.Equals (Args.TARGET_COLLECTION)))
+            {
+                int startIndex        = GetArgumentIndex (args, Args.TARGET_COLLECTION);
+                _targetCollectionName = args[startIndex + 1];
+            }
+            else
+            {
+                // Abort. This parameter is mandatory
+                Console.WriteLine ("No 'target' received. This parameter is mandatory since it indicates where the merging will take place.");
+                System.Environment.Exit (-103);
+            }
+        }
+
+        /// <summary>
+        /// Loads Configuration from the App.Config file
+        /// </summary>
+        private static void LoadConfiguration ()
+        {
+           _authDatabaseNameSource = ConfigurationManager.AppSettings["authDatabaseNameSource"];
+           _authDatabaseNameTarget = ConfigurationManager.AppSettings["authDatabaseNameTarget"];
+           _sourceServer           = ConfigurationManager.AppSettings["sourceServer"  ];
+           _sourceUsername         = ConfigurationManager.AppSettings["sourceUsername"];
+           _sourcePassword         = ConfigurationManager.AppSettings["sourcePassword"];
+           _targetServer           = ConfigurationManager.AppSettings["targetServer"  ];
+           _targetUsername         = ConfigurationManager.AppSettings["targetUsername"];
+           _targetPassword         = ConfigurationManager.AppSettings["targetPassword"];
+           _targetDatabaseName     = ConfigurationManager.AppSettings["targetDatabaseName"];
+           _sourceDatabaseName     = ConfigurationManager.AppSettings["sourceDatabaseName"];
+           _insertBatchSize        = Int32.Parse (ConfigurationManager.AppSettings["insertBatchSize"]);
         }
 
         /// <summary>
@@ -232,7 +237,7 @@ namespace Migrate
         /// <returns>Index of the argument within array. -1 if not found</returns>
         private static int GetArgumentIndex (string[] args, string argName)
         {
-            for (int i = 0 ; i <= args.Count() ; i++)
+            for (int i = 0; i <= args.Count (); i++)
             {
                 if (args[i].Equals (argName))
                 {
@@ -245,5 +250,3 @@ namespace Migrate
         }
     }
 }
-
-

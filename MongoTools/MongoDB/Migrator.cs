@@ -29,7 +29,7 @@ namespace MongoDB
                 // Console Feedback
                 Console.WriteLine ("Migrating Collection : " + collectionName);
 
-                SharedMethods.CopyCollection (sourceDatabase, targetDatabase, collectionName, insertBatchSize, copyIndexes, dropCollections);
+                SharedMethods.CopyCollection (sourceDatabase, targetDatabase, collectionName, String.Empty, insertBatchSize, copyIndexes, dropCollections);
             });
         }
 
@@ -52,7 +52,7 @@ namespace MongoDB
                 // Console Feedback
                 Console.WriteLine ("Migrating Collection : " + collectionName);
 
-                SharedMethods.CopyCollection (sourceDatabase, targetDatabase, collectionName, insertBatchSize, copyIndexes, dropCollections);
+                SharedMethods.CopyCollection (sourceDatabase, targetDatabase, collectionName, String.Empty, insertBatchSize, copyIndexes, dropCollections);
             });
         }
 
@@ -75,7 +75,7 @@ namespace MongoDB
                 // Console Feedback
                 Console.WriteLine ("Migrating Collection : " + collectionName);
 
-                SharedMethods.CopyCollection (sourceDatabase, targetDatabase, collectionName, insertBatchSize, copyIndexes, dropCollections);
+                SharedMethods.CopyCollection (sourceDatabase, targetDatabase, collectionName, String.Empty, insertBatchSize, copyIndexes, dropCollections);
             });
         }
     }

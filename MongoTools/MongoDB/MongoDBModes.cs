@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace MongoDB
 {
     /// <summary>
-    /// Enum of possible Copy Modes (used to avoid messing with "Strings" or "Ints"
+    /// Enum of possible Copy Modes (used to avoid messing with "Strings" or "Ints")
     /// </summary>
     public enum CopyMode
     {
@@ -15,10 +15,18 @@ namespace MongoDB
     }
 
     /// <summary>
-    /// Enum of Possible Duplicate Modes (used to avoid messing with "Strings" or "Ints"
+    /// Enum of Possible Duplicate Modes (used to avoid messing with "Strings" or "Ints")
     /// </summary>
     public enum DuplicateMode
     {
         DuplicateCollections, DuplicateCollectionsWithMask
+    }
+
+    /// <summary>
+    /// Enum of possible Merge Modes (used to avoid messing with "Strings" or "Ints")
+    /// </summary>
+    public enum MergeMode
+    {
+        FullDatabaseMerge, CollectionsMerge, CollectionsMaskMerge
     }
 }

@@ -17,9 +17,9 @@ namespace MongoDB
         /// <param name="sourceDatabase"></param>
         /// <param name="targetDatabase"></param>
         /// <param name="buffer"></param>
-        /// <param name="collection"></param>
+        /// <param name="sourceCollection"></param>
         /// <param name="insertBatchSize"></param>
-        public static void CopyCollection (MongoDatabase sourceDatabase, MongoDatabase targetDatabase, string collection, int insertBatchSize, bool copyIndexes, bool dropCollections)
+        public static void CopyCollection (MongoDatabase sourceDatabase, MongoDatabase targetDatabase, string sourceCollectionName, string targetCollectionName = "", int insertBatchSize = 100, bool copyIndexes = false, bool dropCollections = false)
         {
             // Local Buffer
             List<BsonDocument> buffer = new List<BsonDocument> (insertBatchSize);
@@ -28,8 +28,8 @@ namespace MongoDB
             int count = 0;
 
             // Reaching Collections
-            var sourceCollection = sourceDatabase.GetCollection (collection);
-            var targetCollection = targetDatabase.GetCollection (collection);
+            var sourceCollection = sourceDatabase.GetCollection (sourceCollectionName);
+            var targetCollection = targetDatabase.GetCollection (String.IsNullOrEmpty (targetCollectionName) ? sourceCollectionName : targetCollectionName);
 
             // Checking for the need to drop the collection before adding data to it
             if (dropCollections)
@@ -58,9 +58,9 @@ namespace MongoDB
                 {
                     try
                     {
-                        targetCollection.InsertBatch (buffer);
+                        targetCollection.SafeInsertBatch (buffer);
                         buffer.Clear ();
-                        Console.WriteLine ("progress {0}.{1} : {2} ", sourceDatabase.Name, collection, count);
+                        Console.WriteLine ("progress {0}.{1} : {2} ", sourceDatabase.Name, sourceCollection, count);
                     }
                     catch (Exception ex)
                     {
@@ -79,7 +79,7 @@ namespace MongoDB
                 {
                     targetCollection.InsertBatch (buffer);
                     buffer.Clear ();
-                    Console.WriteLine ("progress {0}.{1} : {2} ", sourceDatabase.Name, collection, count);
+                    Console.WriteLine ("progress {0}.{1} : {2} ", sourceDatabase.Name, sourceCollection, count);
                 }
                 catch (Exception ex)
                 {

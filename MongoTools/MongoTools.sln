@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Export", "Export\Export.csp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CSVReflection", "CSVReflection\CSVReflection.csproj", "{F931AD6F-E21B-4927-B010-58E63262C938}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Merge", "Merge\Merge.csproj", "{BCFC7D0D-8441-4F9A-82BA-6A0EE4EB28A7}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +41,10 @@ Global
 		{F931AD6F-E21B-4927-B010-58E63262C938}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F931AD6F-E21B-4927-B010-58E63262C938}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F931AD6F-E21B-4927-B010-58E63262C938}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BCFC7D0D-8441-4F9A-82BA-6A0EE4EB28A7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BCFC7D0D-8441-4F9A-82BA-6A0EE4EB28A7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BCFC7D0D-8441-4F9A-82BA-6A0EE4EB28A7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BCFC7D0D-8441-4F9A-82BA-6A0EE4EB28A7}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
