@@ -2,24 +2,19 @@
  *  Parameters:
  *   -h : Shows Help
  *   
- *   -full : Indicates that the whole database should be copied (This is exclusive with -collections and -collections-mask)
+ *   -full : Indicates that the whole database (all collections it contains) should be merged into a single collection (This is exclusive with -collections and -collections-mask)
  *   
- *   -collections : Indicates that a list of collections to be copied will be received (This is exclusive with -full and -collections-mask)
+ *   -collections : Indicates that a list of collections to be merged will be received (This is exclusive with -full and -collections-mask)
  *   
- *   -collections-mask : Indicates that a mask will be received to match the collections names that should be copied (This is exclusive with -full and -collections)
+ *   -collections-mask : Indicates that a mask will be received to match the collections names that should be merged (This is exclusive with -full and -collections)
  * 
- *   -copy-indexes : Indicates whether the collection indexes must be copied aswell or not (it not received, the indexes won't be copied)
- *   
- *   -drop-collections : If received will force each TARGET collection to be droped prior to being updated. This should be used when you want the target collection to be
- *                       empty before the copy operation kicks in
+ *   -target : The name of the collection where all the data will be merged into. This parameter is mandatory
+ *    
  * 
  *  Examples of usage:
- *      Copying Full Database                                                 : Migrate.exe -full
- *      Copying Full Database, droping the target before:                     : Migrate.exe -full -drop-collections
- *      Copying Full Database with Indexes                                    : Migrate.exe -full -copy-indexes
- *      Copying a List of Collections (with indexes)                          : Migrate.exe -collections "collection1" "collection2" "awesomeCollection" -copy-indexes
- *      Copying a List of Collections (with indexes), droping each one before : Migrate.exe -collections "collection1" "collection2" "awesomeCollection" -copy-indexes -drop-collections
- *      Copying All Collections that matches the mask "Products_Collection"   : Migrate.exe -collections-mask "Products_Collection"
+ *      Merging Full Database                                                 : Merge.exe -full
+ *      Merging a List of Collections                                         : Merge.exe -collections "collection1" "collection2" "awesomeCollection" -target "mergedCollection"
+ *      Merging All Collections that matches the mask "Products_Collection"   : Merge.exe -collections-mask "Products_Collection" -target "myMergedCollection"
  * 
  */
 
