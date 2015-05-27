@@ -1,0 +1,33 @@
+﻿##########################################
+List of Parameters
+
+	-h | -help : Shows Help
+	-logLevel : change the verbosity of log messages written to the logfile. Defaults to Info. Values = [Trace, Debug, Info, Warn, Error, Fatal]
+	-logFilename : name of the log file.
+	-config : Address to an external file with a json format configuration options. At service start up the file will be loaded and parsed. 
+	-waitForKeyBeforeExit : If the console application should ask for user input at the end, before exiting the application. 
+
+
+	-sourceAuthDatabase : authentication database for the source MongoDb server.
+	-sourceServer : source MongoDb server url. Format: address:port
+	-sourceUsername : source MongoDb server credentials.
+	-sourcePassword : source MongoDb server credentials.
+	-sourceDatabase : name of the database.
+	
+	
+	-targetAuthDatabase : authentication database for the target MongoDb server.
+	-targetServer : target MongoDb server url. Format: address:port
+	-targetServer : target MongoDb server url. Format: address:port
+	-targetUsername : target MongoDb server credentials.
+	-targetPassword : target MongoDb server credentials.
+	-targetDatabase : name of the database.
+
+
+	-insertBatchSize : Size of the insert batch operation. Defaults to 150.
+	-threads : number of concurrent collections copy
+	-full : Copies full database
+	-copy-indexes : Indexes will be copied if this is received. Defaults to true.
+	-collections : If received this will be used instead of full database copy. Format: "col1,col2,col3"
+	-collections-mask : mask of the collection name. Format: "col1,col2,col3"
+	-drop-collections: If received, will force drop into each collection before copying the data
+##########################################

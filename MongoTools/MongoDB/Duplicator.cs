@@ -20,6 +20,10 @@ namespace MongoDB
         /// <param name="duplicationSuffix">Suffix that wil be appended to the name of the collection, when duplicated</param>
         public static void CollectionsDuplicate (MongoDatabase database, Lazy<List<String>> collectionsToDuplicate, int insertBatchSize = 100, bool copyIndexes = true, string duplicationSuffix = "_COPY")
         {
+            if (String.IsNullOrWhiteSpace (duplicationSuffix))
+            {
+                throw new ArgumentNullException ("duplicationSuffix");
+            }
             // Parallel Options
             var multiThreadingOptions = new ParallelOptions () { MaxDegreeOfParallelism = System.Environment.ProcessorCount * 2};
 
@@ -30,7 +34,7 @@ namespace MongoDB
                 Console.WriteLine ("Duplicating Collection : " + collectionName);
 
                 // Duplication Method
-                SharedMethods.DuplicateCollection (database, collectionName, duplicationSuffix, insertBatchSize, copyIndexes);
+                SharedMethods.CopyCollection (database, database, collectionName, collectionName + duplicationSuffix, insertBatchSize, copyIndexes, true);
             });
         }
 
@@ -45,6 +49,11 @@ namespace MongoDB
         /// <param name="duplicationSuffix">Suffix that wil be appended to the name of the collection, when duplicated</param>
         public static void CollectionsDuplicate (MongoDatabase database, String collectionsNameMask, int insertBatchSize = 100, bool copyIndexes = true, string duplicationSuffix = "_COPY")
         {
+            if (String.IsNullOrWhiteSpace (duplicationSuffix))
+            {
+                throw new ArgumentNullException ("duplicationSuffix");
+            }
+
             // Parallel Options
             var multiThreadingOptions = new ParallelOptions () { MaxDegreeOfParallelism = System.Environment.ProcessorCount * 2};
 
@@ -55,7 +64,7 @@ namespace MongoDB
                 Console.WriteLine ("Duplicating Collection : " + collectionName);
 
                 // Duplication Method
-                SharedMethods.DuplicateCollection (database, collectionName, duplicationSuffix, insertBatchSize, copyIndexes);
+                SharedMethods.CopyCollection (database, database, collectionName, collectionName + duplicationSuffix, insertBatchSize, copyIndexes, true);
             });
         }
     }

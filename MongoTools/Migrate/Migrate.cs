@@ -25,6 +25,8 @@
 
 using MongoDB;
 using MongoDB.Driver;
+using MongoDB.SimpleHelpers;
+using NLog;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
@@ -39,8 +41,8 @@ namespace Migrate
         #region ** Attributes **
 
         // Mongo Related Attributes
-        private static string _authDatabaseNameSource;
-        private static string _authDatabaseNameTarget;
+        private static string _sourceAuthDatabase;
+        private static string _targetAuthDatabase;
         private static string _sourceServer;
         private static string _sourceUsername;
         private static string _sourcePassword;
@@ -50,72 +52,92 @@ namespace Migrate
         private static string _targetDatabaseName;
         private static string _sourceDatabaseName;
         private static int    _insertBatchSize;
+        private static int    _threads;
 
         // Arguments
         private static CopyMode           _copyMode;
         private static bool               _copyIndexes;
         private static bool               _dropCollections;
-        private static Lazy<List<String>> _collections = new Lazy<List<String>> ();
+        private static List<String> _collections = new List<String> ();
 
         #endregion
 
         static void Main (string[] args)
         {
-            // Parameters Check
-            if (args == null || args.Length == 0)
+            // set error exit code
+            System.Environment.ExitCode = -50;
+            try
             {
-                // Error
-                Console.WriteLine ("No arguments received. Type pass '-h' to receive a list of parameters");
-                System.Environment.Exit (-101);
-            }
+                // load configurations
+                ProgramOptions = ConsoleUtils.Initialize (args, true);           
+                    
+                // start execution
+                Execute (ProgramOptions);
 
-            // Should print help ?
-            if (args.Where (t => t == "-h").FirstOrDefault() != null)
+                // check before ending for waitForKeyBeforeExit option
+                if (ProgramOptions.Get ("waitForKeyBeforeExit", false))
+                    ConsoleUtils.WaitForAnyKey ();
+            }
+            catch (Exception ex)
             {
-                // Printing Help - Parameters
-                PrintHelp ();
-                return;
-            }
+                LogManager.GetCurrentClassLogger ().Fatal (ex);
 
+                // check before ending for waitForKeyBeforeExit option
+                if (ProgramOptions.Get ("waitForKeyBeforeExit", false))
+                    ConsoleUtils.WaitForAnyKey ();
+
+                ConsoleUtils.CloseApplication (-60, true);
+            }
+            // set success exit code
+            ConsoleUtils.CloseApplication (0, false);
+        }
+
+        static FlexibleOptions ProgramOptions { get; set; }
+        static Logger logger = LogManager.GetCurrentClassLogger ();
+        static DateTime Started = DateTime.UtcNow;
+
+        private static void Execute (FlexibleOptions options)
+        {
+            logger.Debug ("Start");
+        
             // Parsing Arguments - Sanity Check
-            ParseArguments (args);
+            ParseArguments (options);
 
             // Reading App Config
             LoadConfiguration ();
 
-            Console.WriteLine ("Reaching Databases");
+            logger.Debug ("Opening connections...");
 
             // Building Connection Strings
-            String sourceConnString = MongoDbContext.BuildConnectionString (_sourceUsername, _sourcePassword, _sourceServer, _authDatabaseNameSource);
-            String targetConnString = MongoDbContext.BuildConnectionString (_targetUsername, _targetPassword, _targetServer, _authDatabaseNameTarget);
+            String sourceConnString = MongoDbContext.BuildConnectionString (_sourceUsername, _sourcePassword, true, true, _sourceServer, 30000, 120000, _sourceAuthDatabase);
+            String targetConnString = MongoDbContext.BuildConnectionString (_targetUsername, _targetPassword, true, true, _targetServer, 30000, 120000, _targetAuthDatabase);
 
             // Reaching Databases
             MongoDatabase sourceDatabase = MongoDbContext.GetServer (sourceConnString).GetDatabase (_sourceDatabaseName);
             MongoDatabase targetDatabase = MongoDbContext.GetServer (targetConnString).GetDatabase (_targetDatabaseName);
 
-            Console.WriteLine ("Migrating Data");
+            logger.Debug ("Start migrating data...");
 
             // Picking which method to use
             switch (_copyMode)
             {
                 case CopyMode.FullDatabaseCopy:
-                    Console.WriteLine ("Copying Full Database");
-                    Migrator.DatabaseCopy (sourceDatabase, targetDatabase, _insertBatchSize, _copyIndexes, _dropCollections);                    
+                    logger.Debug  ("Copying Full Database");
+                    Migrator.DatabaseCopy (sourceDatabase, targetDatabase, _insertBatchSize, _copyIndexes, _dropCollections, _threads);                    
                 break;
 
                 case CopyMode.CollectionsCopy:
-                    Console.WriteLine ("Copying Collections from List");
-                    Migrator.CollectionsCopy (sourceDatabase, targetDatabase, _collections, _insertBatchSize, _copyIndexes, _dropCollections);                    
+                    logger.Debug ("Copying Collections from List");
+                    Migrator.CollectionsCopy (sourceDatabase, targetDatabase, _collections, _insertBatchSize, _copyIndexes, _dropCollections, _threads); 
                 break;
 
                 case CopyMode.CollectionsMaskCopy:
-                    Console.WriteLine ("Copying Collections that matches : " + _collections.Value.First());
-                    Migrator.CollectionsCopy (sourceDatabase, targetDatabase, _collections.Value.First (), _insertBatchSize, _copyIndexes, _dropCollections);                    
+                    logger.Debug ("Copying Collections that matches : " + String.Join (", ", _collections));
+                    Migrator.CollectionsCopy (sourceDatabase, targetDatabase, _collections.First (), _insertBatchSize, _copyIndexes, _dropCollections, _threads);                    
                 break;
             }
 
-            Console.WriteLine ("Copy Finished");
-            Console.ReadLine ();
+            logger.Debug ("Done migrating data!");
         }
 
         /// <summary>
@@ -123,70 +145,51 @@ namespace Migrate
         /// </summary>
         private static void LoadConfiguration()
         {
-           _authDatabaseNameSource = ConfigurationManager.AppSettings["authDatabaseNameSource"];
-           _authDatabaseNameTarget = ConfigurationManager.AppSettings["authDatabaseNameTarget"];
-           _sourceServer           = ConfigurationManager.AppSettings["sourceServer"  ];
-           _sourceUsername         = ConfigurationManager.AppSettings["sourceUsername"];
-           _sourcePassword         = ConfigurationManager.AppSettings["sourcePassword"];
-           _targetServer           = ConfigurationManager.AppSettings["targetServer"  ];
-           _targetUsername         = ConfigurationManager.AppSettings["targetUsername"];
-           _targetPassword         = ConfigurationManager.AppSettings["targetPassword"];
-           _targetDatabaseName     = ConfigurationManager.AppSettings["targetDatabaseName"];
-           _sourceDatabaseName     = ConfigurationManager.AppSettings["sourceDatabaseName"];
-           _insertBatchSize        = Int32.Parse (ConfigurationManager.AppSettings["insertBatchSize"]);
-        }
+            _sourceAuthDatabase = ProgramOptions.Get ("sourceAuthDatabase", ProgramOptions["authDatabaseNameSource"]);
+            _targetAuthDatabase = ProgramOptions.Get ("targetAuthDatabase", ProgramOptions["authDatabaseNameTarget"]);
+           _sourceServer            = ProgramOptions["sourceServer"  ];
+           _sourceUsername          = ProgramOptions["sourceUsername"];
+           _sourcePassword          = ProgramOptions["sourcePassword"];
+           _sourceDatabaseName      = ProgramOptions.Get ("sourceDatabase", ProgramOptions["sourceDatabaseName"]);
+           _targetServer            = ProgramOptions["targetServer"  ];
+           _targetUsername          = ProgramOptions["targetUsername"];
+           _targetPassword          = ProgramOptions["targetPassword"];
+           _targetDatabaseName      = ProgramOptions.Get ("targetDatabase", ProgramOptions.Get ("targetDatabaseName", ""));
+            if (String.IsNullOrEmpty (_targetDatabaseName))
+                _targetDatabaseName = _sourceDatabaseName;
+           _insertBatchSize         = ProgramOptions.Get ("insertBatchSize", 150);
+           _threads                 = ProgramOptions.Get ("threads", 1);
 
-        /// <summary>
-        /// Prints the Help menu for this Tool
-        /// </summary>
-        private static void PrintHelp ()
-        {
-            Console.WriteLine ("***********************************");
-            Console.WriteLine ("List of Parameters");
-            Console.WriteLine ("\t-h : Shows Help");
-            Console.WriteLine ("\t-full : Copies full database");
-            Console.WriteLine ("\t-copy-indexes : Indexes will be copied if this is received");
-            Console.WriteLine ("\t-collections col1 col2 col3 : If received this will be used instead of full database copy");
-            Console.WriteLine ("\t-collections-mask : mask of the collection name");
-            Console.WriteLine ("\t-drop-collections: If received, will force drop into each collection before copying the data");
-            Console.WriteLine ("***********************************");
+           _copyIndexes             = ProgramOptions.Get ("copy-indexes", true);
+           _dropCollections         = ProgramOptions.Get ("drop-collections", false);
         }
-
+        
         /// <summary>
         /// Parses out the Arguments received from the "CLI"
         /// </summary>
         /// <param name="args">Array of arguments received from the "CLI"</param>
-        private static void ParseArguments (string[] args)
+        private static void ParseArguments (FlexibleOptions options)
         {
+            LoadConfiguration ();
+
             // Checking whether the Args.FULL_COPY parameter was received, with no other "collection" parameter set to true
-            if ((args.Where (t => t.Equals (Args.FULL_COPY)).FirstOrDefault () != null)
-                           && ((args.Where (t => t.Contains (Args.COLLECTIONS_COPY)).FirstOrDefault () == null)))
+            if (ProgramOptions.Get (Args.FULL_COPY, true))
             {
                 _copyMode = CopyMode.FullDatabaseCopy;
             }
-            else // If its not full copy, than, what it is ?
+            else if (ProgramOptions.HasOption (Args.COLLECTIONS_COPY))
             {
-                // Is it Collections or Collections-Mask ? 
-                if (args.Where (t => t.Equals (Args.COLLECTIONS_COPY)).FirstOrDefault () != null)
-                {
-                    _copyMode = CopyMode.CollectionsCopy;
-                }
-                else if (args.Where (t => t.Equals (Args.COLLECTIONS_MASK)).FirstOrDefault () != null)
-                {
-                    _copyMode = CopyMode.CollectionsMaskCopy;
-                }
-                else // If no parameter was set (neither "full", "collections" or "collections-mask", aborts)
-                {
-                    Console.WriteLine ("No 'copy-parameter' received. Expected either : -full , -collections or -collections-mask");
-                    System.Environment.Exit (-102);
-                }
+                _copyMode = CopyMode.CollectionsCopy;
             }
-
-            // Checking for index-copy parameter
-            _copyIndexes = (args.Where (t => t.Equals (Args.COPY_INDEXES)).FirstOrDefault () != null);
-
-            // Checking for drop-collections parameter
-            _dropCollections = (args.Where (t => t.Equals (Args.DROP_COLLECTIONS)).FirstOrDefault () != null);
+            else if (ProgramOptions.HasOption (Args.COLLECTIONS_MASK))
+            {
+                _copyMode = CopyMode.CollectionsMaskCopy;
+            }
+            else // If no parameter was set (neither "full", "collections" or "collections-mask", aborts)
+            {
+                logger.Error ("No 'copy-parameter' received. Expected either : -full , -collections or -collections-mask");
+                ConsoleUtils.CloseApplication (-102, true);
+            }
 
             // Parsing the rest of the args based on the ones received
             switch (_copyMode)
@@ -197,52 +200,31 @@ namespace Migrate
 
                  // Parsing collection names after the argument
                 case CopyMode.CollectionsCopy:
-
-                    // Reading arguments for the collection names
-                    int startIndex = GetArgumentIndex (args, Args.COLLECTIONS_COPY) + 1;
-                    for (int index = startIndex ; index < args.Length ; index++)
                     {
-                        // Checking whether this argument starts with '-' meaning that it is a parameter, and should not be added to the list of collections
-                        if (args[index].StartsWith ("-"))
+                        var list = ProgramOptions.Get<string[]> (Args.COLLECTIONS_COPY, null);
+                        if (list == null)
+                            list = ProgramOptions.Get (Args.COLLECTIONS_COPY, "").Split (',', ';');
+                        if (list != null)
                         {
-                            break;
+                            _collections = list.Select (i => i.Trim ()).Where (i => !String.IsNullOrEmpty (i)).ToList ();
                         }
-
-                        // Adds it to the list of collection names
-                        _collections.Value.Add (args[index]);
                     }
-
                 break;
 
                 case CopyMode.CollectionsMaskCopy:
-
-                    startIndex = GetArgumentIndex (args, Args.COLLECTIONS_MASK);
-                    _collections.Value.Add (args[startIndex + 1]);
-
+                    {
+                        var list = ProgramOptions.Get<string[]> (Args.COLLECTIONS_MASK, null);
+                        if (list == null)
+                            list = ProgramOptions.Get (Args.COLLECTIONS_MASK, "").Split (',', ';');
+                        if (list != null)
+                        {
+                            _collections = list.Select (i => i.Trim ()).Where (i => !String.IsNullOrEmpty (i)).ToList ();
+                        }
+                    }
                 break;
             }
         }
-
-        /// <summary>
-        /// Gets the Index of the received argument (by key) within
-        /// the array of arguments
-        /// </summary>
-        /// <param name="args">Array of Arguments</param>
-        /// <param name="argName">Key (name) of the argument searched</param>
-        /// <returns>Index of the argument within array. -1 if not found</returns>
-        private static int GetArgumentIndex (string[] args, string argName)
-        {
-            for (int i = 0 ; i <= args.Count() ; i++)
-            {
-                if (args[i].Equals (argName))
-                {
-                    return i;
-                }
-            }
-
-            // Not Found
-            return -1;
-        }
+        
     }
 }
 

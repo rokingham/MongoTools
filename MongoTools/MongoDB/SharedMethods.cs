@@ -21,185 +21,123 @@ namespace MongoDB
         /// <param name="insertBatchSize"></param>
         public static void CopyCollection (MongoDatabase sourceDatabase, MongoDatabase targetDatabase, string sourceCollectionName, string targetCollectionName = "", int insertBatchSize = 100, bool copyIndexes = false, bool dropCollections = false)
         {
-            // Local Buffer
-            List<BsonDocument> buffer = new List<BsonDocument> (insertBatchSize);
+            var logger = NLog.LogManager.GetLogger ("CopyCollection");
+            try
+            {                
+                // Local Buffer
+                List<BsonDocument> buffer = new List<BsonDocument> (insertBatchSize);
 
-            // Resets Counter
-            int count = 0;
+                // Resets Counter
+                long count = 0;
+                int loop = 0;
 
-            // Reaching Collections
-            var sourceCollection = sourceDatabase.GetCollection (sourceCollectionName);
-            var targetCollection = targetDatabase.GetCollection (String.IsNullOrEmpty (targetCollectionName) ? sourceCollectionName : targetCollectionName);
+                // Reaching Collections
+                var sourceCollection = sourceDatabase.GetCollection (sourceCollectionName);
+                var targetCollection = targetDatabase.GetCollection (String.IsNullOrEmpty (targetCollectionName) ? sourceCollectionName : targetCollectionName);
 
-            // Checking for the need to drop the collection before adding data to it
-            if (dropCollections)
-            {
-                targetCollection.Drop ();
-            }
+                // Skipping System Collections - For Safety Reasons
+                if (sourceCollection.FullName.IndexOf ("system.", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return;
+                }
 
-            IMongoQuery query = null;
+                if (sourceCollection.IsCapped ())
+                {
+                    logger.Warn ("Skiping capped collection " + sourceDatabase.Name + "." + sourceCollectionName);
+                    return;    
+                }
 
-            // Skipping System Collections - For Safety Reasons
-            if (sourceCollection.FullName.IndexOf ("system.", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return;
-            }
-
-            // Running Copy
-            foreach (BsonDocument i in sourceCollection.Find (query))
-            {
-                // Feedback and Local Buffer
-                count++;
-
-                buffer.Add (i);
-
-                // Dumping data to database every 'X' records
-                if (buffer.Count >= insertBatchSize)
+                // Checking for the need to drop the collection before adding data to it
+                if (dropCollections)
                 {
                     try
                     {
-                        targetCollection.SafeInsertBatch (buffer);
-                        buffer.Clear ();
-                        Console.WriteLine ("progress {0}.{1} : {2} ", sourceDatabase.Name, sourceCollection, count);
+                        targetCollection.Drop ();
                     }
                     catch (Exception ex)
                     {
+                        logger.Warn ("Cannot drop collection", ex);
+                        return;
+                    }
+                }
+                
+                // Running Copy
+                foreach (BsonDocument i in sourceCollection.Find (null).SetSortOrder ("_id"))
+                {
+                    // Feedback and Local Buffer
+                    count++;
+
+                    buffer.Add (i);
+
+                    // Dumping data to database every 'X' records
+                    if (buffer.Count >= insertBatchSize)
+                    {
+                        try
+                        {
+                            targetCollection.SafeInsertBatch (buffer, 3, true, true);
+                            if (loop++ % 100 == 1)
+                            {
+                                logger.Debug ("progress {0}.{1} : {2} ", sourceDatabase.Name, sourceCollection, count);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.Error (ex);
+                            System.Threading.Thread.Sleep (100);
+                        }
                         buffer.Clear ();
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine (ex);
-                        Console.ForegroundColor = ConsoleColor.White;
                     }
                 }
-            }
 
-            // Copying Remaining of Local Buffer
-            if (buffer.Count > 0)
-            {
-                try
+                // Copying Remaining of Local Buffer
+                if (buffer.Count > 0)
                 {
-                    targetCollection.InsertBatch (buffer);
+                    try
+                    {
+                        targetCollection.SafeInsertBatch (buffer, 3, true, true);
+                        logger.Debug ("progress {0}.{1} : {2} ", sourceDatabase.Name, sourceCollection, count);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Error (ex);
+                    }
                     buffer.Clear ();
-                    Console.WriteLine ("progress {0}.{1} : {2} ", sourceDatabase.Name, sourceCollection, count);
                 }
-                catch (Exception ex)
+
+                // Checkign for the need to copy indexes aswell
+                if (copyIndexes)
                 {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine (ex);
-                    Console.ForegroundColor = ConsoleColor.White;
+                    logger.Debug ("start index creation {0}.{1} ", sourceDatabase.Name, sourceCollection);
+                    // Copying Indexes - If Any
+                    foreach (IndexInfo idx in sourceCollection.GetIndexes ())
+                    {
+                        // Skipping "_id_" default index - Since Every mongodb Collection has it
+                        if (idx.Name == "_id_")
+                        {
+                            continue;
+                        }
+
+                        // Recreating Index Options based on the current index options
+                        var opts = IndexOptions.SetBackground (idx.IsBackground)
+                                       .SetSparse (idx.IsSparse).SetUnique (idx.IsUnique).SetName (idx.Name).SetDropDups (idx.DroppedDups);
+
+                        if (idx.TimeToLive < TimeSpan.MaxValue)
+                        {
+                            opts.SetTimeToLive (idx.TimeToLive);
+                        }
+
+                        logger.Debug ("creating index {0}.{1} : {2}", sourceDatabase.Name, sourceCollection, idx.Name);
+
+                        // Adding Index
+                        targetCollection.CreateIndex (idx.Key, opts);
+                    }
+                    logger.Debug ("index creation completed {0}.{1} ", sourceDatabase.Name, sourceCollection);
                 }
             }
-
-            // Checkign for the need to copy indexes aswell
-            if (copyIndexes)
+            catch (Exception ex)
             {
-                // Copying Indexes - If Any
-                foreach (IndexInfo idx in sourceCollection.GetIndexes ())
-                {
-                    // Skipping "_id_" default index - Since Every mongodb Collection has it
-                    if (idx.Name == "_id_")
-                    {
-                        continue;
-                    }
-
-                    // Recreating Index Options based on the current index options
-                    var opts = IndexOptions.SetBackground (idx.IsBackground)
-                                           .SetSparse (idx.IsSparse).SetUnique (idx.IsUnique).SetName (idx.Name).SetDropDups (idx.DroppedDups);
-
-                    if (idx.TimeToLive < TimeSpan.MaxValue)
-                    {
-                        opts.SetTimeToLive (idx.TimeToLive);
-                    }
-
-                    // Adding Index
-                    targetCollection.EnsureIndex (idx.Key, opts);
-                }
-            }
-        }
-
-        public static void DuplicateCollection (MongoDatabase database, string collection, string duplicationSuffix, int insertBatchSize ,bool copyIndexes)
-        {
-            // Local Buffer
-            List<BsonDocument> buffer = new List<BsonDocument> (insertBatchSize);
-
-            // Resets Counter
-            int count = 0;
-
-            // Reaching Collections (source one and the target one with the suffix)
-            var sourceCollection = database.GetCollection (collection);
-            var targetCollection = database.GetCollection (collection + duplicationSuffix);
-
-            IMongoQuery query = null;
-
-            // Skipping System Collections - For Safety Reasons
-            if (sourceCollection.FullName.IndexOf ("system.", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
+                logger.Error ("Skipping collection", ex);
                 return;
-            }
-
-            // Running Copy
-            foreach (BsonDocument i in sourceCollection.Find (query).SetSortOrder ("_id"))
-            {
-                // Feedback and Local Buffer
-                count++;
-
-                buffer.Add (i);
-
-                // Dumping data to database every 'X' records
-                try
-                {
-                    targetCollection.InsertBatch (buffer);
-                    buffer.Clear ();
-                    Console.WriteLine ("progress {0}.{1} : {2} ", database.Name, collection, count);
-                }
-                catch (Exception ex)
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine (ex);
-                    Console.ForegroundColor = ConsoleColor.White;
-                }
-            }
-
-            // Copying Remaining of Local Buffer
-            if (buffer.Count > 0)
-            {
-                try
-                {
-                    targetCollection.InsertBatch (buffer);
-                    buffer.Clear ();
-                    Console.WriteLine ("progress {0}.{1} : {2} ", database.Name, collection, count);
-                }
-                catch (Exception ex)
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine (ex);
-                    Console.ForegroundColor = ConsoleColor.White;
-                }
-            }
-
-            // Checkign for the need to copy indexes aswell
-            if (copyIndexes)
-            {
-                // Copying Indexes - If Any
-                foreach (IndexInfo idx in sourceCollection.GetIndexes ())
-                {
-                    // Skipping "_id_" default index - Since Every mongodb Collection has it
-                    if (idx.Name == "_id_")
-                    {
-                        continue;
-                    }
-
-                    // Recreating Index Options based on the current index options
-                    var opts = IndexOptions.SetBackground (idx.IsBackground)
-                                           .SetSparse (idx.IsSparse).SetUnique (idx.IsUnique).SetName (idx.Name).SetDropDups (idx.DroppedDups);
-
-                    if (idx.TimeToLive < TimeSpan.MaxValue)
-                    {
-                        opts.SetTimeToLive (idx.TimeToLive);
-                    }
-
-                    // Adding Index
-                    targetCollection.EnsureIndex (idx.Key, opts);
-                }
             }
         }
     }
