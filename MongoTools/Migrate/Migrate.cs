@@ -109,15 +109,15 @@ namespace Migrate
             logger.Debug ("Opening connections...");
 
             // Building Connection Strings
-            String sourceConnString = MongoDbContext.BuildConnectionString (_sourceUsername, _sourcePassword, true, true, _sourceServer, 30000, 120000, _sourceAuthDatabase);
-            String targetConnString = MongoDbContext.BuildConnectionString (_targetUsername, _targetPassword, true, true, _targetServer, 30000, 120000, _targetAuthDatabase);
+            String sourceConnString = MongoDbContext.BuildConnectionString (_sourceUsername, _sourcePassword, true, true, _sourceServer, 30000, 4 * 60000, _sourceAuthDatabase);
+            String targetConnString = MongoDbContext.BuildConnectionString (_targetUsername, _targetPassword, true, true, _targetServer, 30000, 4 * 60000, _targetAuthDatabase);
 
             // Reaching Databases
             MongoDatabase sourceDatabase = MongoDbContext.GetServer (sourceConnString).GetDatabase (_sourceDatabaseName);
             MongoDatabase targetDatabase = MongoDbContext.GetServer (targetConnString).GetDatabase (_targetDatabaseName);
 
             logger.Debug ("Start migrating data...");
-
+                 
             // Picking which method to use
             switch (_copyMode)
             {
