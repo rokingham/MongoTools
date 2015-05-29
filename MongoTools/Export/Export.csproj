@@ -63,7 +63,7 @@
       <Project>{f931ad6f-e21b-4927-b010-58e63262c938}</Project>
       <Name>CSVReflection</Name>
     </ProjectReference>
-    <ProjectReference Include="..\MongoDB\MongoToolsLib.csproj">
+    <ProjectReference Include="..\MongoToolsLib\MongoToolsLib.csproj">
       <Project>{84fe2785-5e01-44f6-ab1e-642000799469}</Project>
       <Name>MongoToolsLib</Name>
     </ProjectReference>

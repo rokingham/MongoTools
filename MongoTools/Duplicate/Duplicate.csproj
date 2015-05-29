@@ -59,7 +59,7 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\MongoDB\MongoToolsLib.csproj">
+    <ProjectReference Include="..\MongoToolsLib\MongoToolsLib.csproj">
       <Project>{84fe2785-5e01-44f6-ab1e-642000799469}</Project>
       <Name>MongoToolsLib</Name>
     </ProjectReference>

@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2013
 VisualStudioVersion = 12.0.31101.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MongoToolsLib", "MongoDB\MongoToolsLib.csproj", "{84FE2785-5E01-44F6-AB1E-642000799469}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MongoToolsLib", "MongoToolsLib\MongoToolsLib.csproj", "{84FE2785-5E01-44F6-AB1E-642000799469}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MongoCopy", "Migrate\MongoCopy.csproj", "{5CA18455-F618-4707-BB8A-A2E6931C9A81}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MongoCopy", "MongoCopy\MongoCopy.csproj", "{5CA18455-F618-4707-BB8A-A2E6931C9A81}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Duplicate", "Duplicate\Duplicate.csproj", "{3CE6B350-3109-42DF-BB3B-0B4C4AEF1215}"
 EndProject
