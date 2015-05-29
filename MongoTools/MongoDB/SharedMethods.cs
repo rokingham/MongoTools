@@ -7,7 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace MongoDB
+namespace MongoToolsLib
 {
     public class SharedMethods
     {
@@ -19,7 +19,7 @@ namespace MongoDB
         /// <param name="buffer"></param>
         /// <param name="sourceCollection"></param>
         /// <param name="insertBatchSize"></param>
-        public static void CopyCollection (MongoDatabase sourceDatabase, MongoDatabase targetDatabase, string sourceCollectionName, string targetCollectionName = "", int insertBatchSize = 100, bool copyIndexes = false, bool dropCollections = false)
+        public static void CopyCollection (MongoDatabase sourceDatabase, MongoDatabase targetDatabase, string sourceCollectionName, string targetCollectionName = "", int insertBatchSize = -1, bool copyIndexes = false, bool dropCollections = false)
         {
             var logger = NLog.LogManager.GetLogger ("CopyCollection");
             try
@@ -47,10 +47,30 @@ namespace MongoDB
                     return;
                 }
 
-                if (sourceCollection.IsCapped ())
+                try
                 {
-                    logger.Warn ("Skiping capped collection " + sourceDatabase.Name + "." + sourceCollectionName);
-                    return;    
+                    // check if collection is capped collection
+                    // since this is a special type of collection, we will skip it
+                    if (sourceCollection.IsCapped ())
+                    {
+                        logger.Warn ("Skiping capped collection " + sourceDatabase.Name + "." + sourceCollectionName);
+                        return;
+                    }
+
+                    // check if batch size is set to auto
+                    if (insertBatchSize < 1)
+                    {
+                        var stats = sourceCollection.GetStats ();
+                        // older mongodb vertions < 1.8, has a 4mb limit for batch insert
+                        insertBatchSize = ((4 * 1024 * 1024) / (int)stats.AverageObjectSize) + 1;
+                        // also benchmarks didn't show any benefit for batches larger than 100...
+                        if (insertBatchSize > 200)
+                            insertBatchSize = 200;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.Warn ("Cannot get collection statistics... continuing any way. " + sourceCollection.Name, ex);
                 }
 
                 // Checking for the need to drop the collection before adding data to it
@@ -142,7 +162,7 @@ namespace MongoDB
                         catch (Exception ex)
                         {
                             logger.Error ("Error creating index " + idx.Name, ex);
-                        }
+                        }                        
                     }
                     logger.Debug ("index creation completed {0}.{1} ", sourceDatabase.Name, sourceCollection);
                 }
@@ -209,6 +229,32 @@ namespace MongoDB
                     yield return last;
                 }
             }
+        }
+
+        public static string WildcardToRegex (string pattern, bool anchorOnStart = false)
+        {
+            if (pattern == null)
+                return String.Empty;
+            pattern = System.Text.RegularExpressions.Regex.Escape (pattern).Replace (@"\*", ".*").Replace (@"\?", ".");
+            return (anchorOnStart ? "^" : "") + pattern + "$";
+        }
+
+        public static bool HasWildcard (string pattern)
+        {
+            if (pattern == null)
+                return false;
+            return (pattern.IndexOf ('*') > 0 || pattern.IndexOf ('?') > 0);
+        }
+
+        public static bool WildcardIsMatch (string pattern, string input, bool ignoreCase = true)
+        {
+            if (input == pattern) 
+                return true;
+            if (String.IsNullOrWhiteSpace (pattern) || String.IsNullOrWhiteSpace (input))
+                return false;
+            if (!HasWildcard (pattern))
+                return input.Equals (pattern, ignoreCase? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);                    
+            return System.Text.RegularExpressions.Regex.IsMatch (input, WildcardToRegex(pattern, true), ignoreCase ? System.Text.RegularExpressions.RegexOptions.IgnoreCase : System.Text.RegularExpressions.RegexOptions.None);
         }
     }
 }

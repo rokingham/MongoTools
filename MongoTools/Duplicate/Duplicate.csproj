@@ -59,9 +59,9 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\MongoDB\MongoDB.csproj">
+    <ProjectReference Include="..\MongoDB\MongoToolsLib.csproj">
       <Project>{84fe2785-5e01-44f6-ab1e-642000799469}</Project>
-      <Name>MongoDB</Name>
+      <Name>MongoToolsLib</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

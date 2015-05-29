@@ -39,7 +39,7 @@ using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace MongoDB.SimpleHelpers
+namespace MongoToolsLib.SimpleHelpers
 {
     public class ConsoleUtils
     {

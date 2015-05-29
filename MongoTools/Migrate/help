@@ -14,21 +14,25 @@ List of Parameters
 	-sourceServer : source MongoDb server url. Format: host1[:port1][,host2[:port2],...[,hostN[:portN]]
 	-sourceUsername : source MongoDb server credentials.
 	-sourcePassword : source MongoDb server credentials.
-	-sourceDatabase : name of the database.	
 	
 	-targetAuthDatabase : authentication database for the target MongoDb server.
 	-targetServer : target MongoDb server url. Format: host1[:port1][,host2[:port2],...[,hostN[:portN]]
 	-targetUsername : target MongoDb server credentials.
 	-targetPassword : target MongoDb server credentials.
-	-targetDatabase : name of the database. Defaults to sourceDatabase name.  
+	
+	-sourceDatabase : name of the database.	Format: "db1,db2,db3,db_2015*".
+	-targetDatabase : name of the database. Format: "db1,db2,db3,db_2015*". Defaults to sourceDatabase name.  
 
-	-insertBatchSize : Size of the insert batch operation. Defaults to 150.
-	-threads : number of concurrent collections copy. Defaults to 1.
+	-insertBatchSize : Size of the insert batch operation. Defaults to -1 (auto).
+	-threads : number of concurrent collections copy. One collection per thread. Defaults to 1.
 	-copy-indexes : Indexes will be copied if this is received. Defaults to true.
 	-drop-collections: If received, will force drop into each collection before copying the data
 
 	-full : Copies full database	
 	-collections : If received this will be used instead of full database copy. Format: "col1,col2,col3"
 	-collections-mask : mask of the collection name. Format: "col1,col2,col3"
+
+
+	-collections : If received this will be used instead of full database copy. Format: "col1,col2,col3*"
 	
 ##########################################

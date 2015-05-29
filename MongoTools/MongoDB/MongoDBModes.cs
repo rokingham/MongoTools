@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace MongoDB
+namespace MongoToolsLib
 {
     /// <summary>
     /// Enum of possible Copy Modes (used to avoid messing with "Strings" or "Ints")

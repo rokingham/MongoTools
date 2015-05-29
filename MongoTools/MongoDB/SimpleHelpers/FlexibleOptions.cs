@@ -31,12 +31,11 @@
 #endregion
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
 
-namespace MongoDB.SimpleHelpers
+namespace MongoToolsLib.SimpleHelpers
 {
-    public class FlexibleOptions : IEnumerable<KeyValuePair<string, string>>
+    public class FlexibleOptions
     {
         private bool _caseInsensitive = true;
         private Dictionary<string, string> _options;
@@ -287,16 +286,6 @@ namespace MongoDB.SimpleHelpers
                 }
             }
             return merge;
-        }
-
-        IEnumerator IEnumerable.GetEnumerator ()
-        {
-            return Options.GetEnumerator ();
-        }
-
-        public IEnumerator<KeyValuePair<string, string>> GetEnumerator ()
-        {
-            return Options.GetEnumerator ();
         }
     }
 }

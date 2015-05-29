@@ -36,7 +36,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace MongoDB.SimpleHelpers
+namespace MongoToolsLib.SimpleHelpers
 {
     public class FileEncoding
     {
