@@ -12,56 +12,62 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Serialization;
+using Export.SimpleHelpers;
+using NLog;
 
 namespace Export
 {
     class Export
     {
+        public static FlexibleOptions ProgramOptions { get; private set; }
+        public static Logger          Logger  = LogManager.GetCurrentClassLogger ();
+        public static DateTime        Started = DateTime.UtcNow;
+
         // Enum of Possible "Export Formats"
         private enum ExportFormat { JSON = 0, CSV, WRONG_FORMAT }
-
-        // Mongo Related Attributes
-        private static string _sourceServer;
-        private static string _sourceDatabase;
-        private static string _sourceAuthDatabase;
-        private static string _sourceUsername;
-        private static string _sourcePassword;
-        private static string _mongoDbQuery;
-        private static string _mongoCollection;
-
-        // Export Config
-        private static string       _layoutPath;
-        private static string       _outputFile;
-        private static int          _limit;
-        private static bool         _addHeaders;
-        private static ExportFormat _exportFormat;
-
+        
         static void Main (string[] args)
         {
-            // Args Sanity Check
-            if (args == null || args.Length == 0)
+            // set error exit code
+            System.Environment.ExitCode = -50;
+            try
             {
-                Console.WriteLine ("No arguments received. Type pass '-h' to receive a list of parameters");
+                // load configurations
+                ProgramOptions = ConsoleUtils.Initialize (args, true);
+
+                // start execution
+                Execute (ProgramOptions);
+
+                // check before ending for waitForKeyBeforeExit option
+                if (ProgramOptions.Get ("waitForKeyBeforeExit", false))
+                    ConsoleUtils.WaitForAnyKey ();
+            }
+            catch (Exception ex)
+            {
+                LogManager.GetCurrentClassLogger ().Fatal (ex);
+
+                // check before ending for waitForKeyBeforeExit option
+                if (ProgramOptions.Get ("waitForKeyBeforeExit", false))
+                    ConsoleUtils.WaitForAnyKey ();
+
+                ConsoleUtils.CloseApplication (-60, true);
+            }
+
+            // set success exit code
+            ConsoleUtils.CloseApplication (0, false);
+        }
+
+        private static void Execute (FlexibleOptions options)
+        {
+            Logger.Info ("Start");
+           
+            // Args Sanity Check
+            if (options.Options == null || options.Options.Count == 0)
+            {
+                Console.WriteLine ("No arguments received.");
                 System.Environment.Exit (-101);
             }
-
-            // Should print help ?
-            if (args.Where (t => t == "-h").FirstOrDefault () != null)
-            {
-                // Printing Help - Parameters
-                PrintHelp ();
-                return;
-            }
-                        
-            // Loading Configuration
-            LoadConfiguration ();
-
-            // Parsing Arguments
-            ParseArguments (args);
-
-            // Printing Configurations
-            PrintConfiguration ();
-
+            
             // Prompts for user Input
             Console.WriteLine ("Is the configuration correct ? Y/N");
             var key = Console.ReadKey ().Key;
@@ -81,48 +87,52 @@ namespace Export
             Console.WriteLine (" => Proceeding with Export.");
 
             // Sanity Check of Config and Arguments
-            if (!ValidateConfig ())
+            if (!ValidateConfig (options))
             {
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine ("Missing MongoDB Configuration Parameter. (Server, Database, Collection and Credentials are Mandatory)");
+                Console.ForegroundColor = ConsoleColor.White;
                 System.Environment.Exit (-103);
             }
 
             // Creating instance of MongoDB
-            String sourceConnString      = MongoDbContext.BuildConnectionString (_sourceUsername, _sourcePassword, _sourceServer, _sourceAuthDatabase);
+            String sourceConnString      = MongoDbContext.BuildConnectionString (options["sourceUsername"], options["sourcePassword"], options["sourceServer"], options["authDatabaseName"]);
 
             // Reaching Databases
-            MongoDatabase sourceDatabase = MongoDbContext.GetServer (sourceConnString).GetDatabase (_sourceDatabase);
+            MongoDatabase sourceDatabase = MongoDbContext.GetServer (sourceConnString).GetDatabase (options["sourceDatabaseName"]);
 
             // Assembling "Query" to MongoDB, if any query text was provided
-            QueryDocument query          = String.IsNullOrWhiteSpace (_mongoDbQuery) ? null : new QueryDocument (QueryDocument.Parse (_mongoDbQuery));
+            QueryDocument query          = String.IsNullOrWhiteSpace (options["mongoQuery"]) ? null : new QueryDocument (QueryDocument.Parse (options["mongoQuery"]));
 
             // Checking if the provided Collection Exists
-            if (!sourceDatabase.CollectionExists (_mongoCollection))
+            if (!sourceDatabase.CollectionExists (options["collection"]))
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine ("Collection [ " + _mongoCollection + " ] does not exists on the specified database");
+                Console.WriteLine ("Collection [ " + options["collection"] + " ] does not exists on the specified database");
+                Console.ForegroundColor = ConsoleColor.White;
                 System.Environment.Exit (-104);
             }
 
-            if (_exportFormat == ExportFormat.CSV)
+            if (options["format"].ToUpper() == "CSV")
             {
                 // Loading Export Configuration from XML File
-                if (!JsonToCSV.LoadExportLayout (_layoutPath))
+                if (!JsonToCSV.LoadExportLayout (options["layoutFile"]))
                 {
                     // Error Checking
                     Console.ForegroundColor = ConsoleColor.Red;
                     Console.WriteLine ("Error Loading Export Layout");
                     Console.WriteLine ("Message : " + JsonToCSV.errorMessage);
+                    Console.ForegroundColor = ConsoleColor.White;
                     System.Environment.Exit (-105);
                 }
             }
 
             // Setting up MongoDB Cursor
-            MongoCursor cursor = sourceDatabase.GetCollection<BsonDocument> (_mongoCollection).Find (query);
+            MongoCursor cursor = sourceDatabase.GetCollection<BsonDocument> (options["collection"]).Find (query);
             cursor.SetFlags (QueryFlags.NoCursorTimeout);
 
             // Checking for the need to apply limit
+            int _limit = options.Get<int>("limit", -1);
             if (_limit != -1)
             {
                 cursor.SetLimit (_limit);
@@ -135,7 +145,7 @@ namespace Export
             var jsonSettings = new JsonWriterSettings () { OutputMode = JsonOutputMode.Strict };
 
             // File Writer
-            using (StreamWriter fWriter = new StreamWriter (_outputFile, false, Encoding.UTF8))
+            using (StreamWriter fWriter = new StreamWriter (options["outputFile"], false, Encoding.UTF8))
             {
                 // Auto Flush
                 fWriter.AutoFlush = true;
@@ -144,7 +154,7 @@ namespace Export
                 string fileLine = String.Empty;
 
                 // Should we add headers to the output CSV file?
-                if (_exportFormat == ExportFormat.CSV && _addHeaders)
+                if (options["format"].ToUpper () == "CSV" && options.Get<bool>("addHeader", false))
                 {
                     // Writing Headers
                     fWriter.WriteLine (JsonToCSV.Fields);
@@ -154,7 +164,7 @@ namespace Export
                 foreach (BsonDocument document in cursor)
                 {
                     // Picking which export method will be used
-                    if (_exportFormat == ExportFormat.CSV)
+                    if (options["format"].ToUpper () == "CSV")
                     {
                         // Extracting data from it
                         fileLine = JsonToCSV.BsonToCSV (document);
@@ -179,189 +189,26 @@ namespace Export
                         Console.WriteLine ("Processed : " + recordsProcessed);
                     }
                 }
-            }
+            }			
+			
+			Logger.Info ("End");
         }
 
-        /// <summary>
-        /// Reads the data out of the .Config file
-        /// </summary>
-        private static void LoadConfiguration ()
-        {
-            _sourceServer       = ConfigurationManager.AppSettings["sourceServer"];
-            _sourceUsername     = ConfigurationManager.AppSettings["sourceUsername"];
-            _sourcePassword     = ConfigurationManager.AppSettings["sourcePassword"];
-            _sourceDatabase     = ConfigurationManager.AppSettings["sourceDatabaseName"];
-            _sourceAuthDatabase = ConfigurationManager.AppSettings["authDatabaseName"];
-            _mongoDbQuery       = ConfigurationManager.AppSettings["mongoQuery"];
-            _outputFile         = ConfigurationManager.AppSettings["outputCSV"];
-        }
-
-        /// <summary>
-        /// Parses CLI arguments
-        /// </summary>
-        /// <param name="args">List of Args received by the CLI</param>
-        private static void ParseArguments (string[] args)
-        {
-            // Reaching "Export Type" parameter
-            if (args.Where (t => t.Equals (Args.FORMAT_PARAMETER)).FirstOrDefault () != null)
-            {
-                // Reaching the index of the "Format" parameter received
-                int formatIndex = GetArgumentIndex (args, Args.FORMAT_PARAMETER) + 1;
-
-                // Checking whether the third value is either CSV or JSON
-                string format    = args[formatIndex].ToUpper();
-
-                if (format.Equals ("CSV"))
-                {
-                    _exportFormat = ExportFormat.CSV;
-                }
-                else if (format.Equals ("JSON"))
-                {
-                    _exportFormat = ExportFormat.JSON;
-                }
-                else
-                {
-                    // Wrong Format
-                    Console.WriteLine("Wrong value of '-format' parameter received. Expected either : JSON or CSV");
-                    System.Environment.Exit (-101);
-                }
-            }
-            else // No "Format" parameter -> Default is "JSON"
-            {
-                _exportFormat = ExportFormat.JSON;
-            }
-
-            // Checking for "Collection-Name" Parameter
-            if (args.Where (t => t.Equals (Args.COLLECTION_NAME)).FirstOrDefault() != null)
-            {
-                // Reaching the index of the "Collection-Name" parameter received
-                int formatIndex = GetArgumentIndex (args, Args.COLLECTION_NAME) + 1;
-                
-                // Saving "Collection Name" value
-                _mongoCollection = args[formatIndex];
-            }
-            else // Error - No Collection-Name received
-            {
-                Console.WriteLine ("No value of '-collection' received.");
-                System.Environment.Exit (-101);
-            }
-
-            // "Export Layout Configuration"
-            if (args.Where (t => t.Equals (Args.EXPORT_LAYOUT_PATH)).FirstOrDefault() != null)
-            {
-                // If any "Export Layout" was supplied, it means that the "export-format" should be "CSV". But is it ?
-                if (_exportFormat != ExportFormat.CSV)
-                {
-                    // Error, it's not "CSV"
-                    Console.WriteLine ("Received '-export-config-path' parameter, but the '-format' is 'JSON'. Only 'CSV' supports a configuration file");
-                    System.Environment.Exit (-101);
-                }
-
-                // Reching the index of the "Export-Config-Path" parameter received
-                int layoutConfigIndex = GetArgumentIndex (args, Args.EXPORT_LAYOUT_PATH) + 1;
-
-                // Saving "Export Config Path" value
-                _layoutPath = args[layoutConfigIndex];
-            }
-            else // No "Export-Config-Path" received
-            {
-                // If there's no "Config" Path, the export format should be "JSON". But is it ?
-                if (_exportFormat != ExportFormat.JSON)
-                {
-                    // Error, it's not "CSV"
-                    Console.WriteLine ("Haven't received '-export-config-path' parameter, but the '-format' is 'CSV'. All 'CSV' exports need a configuration file");
-                    System.Environment.Exit (-101);
-                }
-            }
-
-            // Checking for "Limit" Parameter
-            if (args.Where (t => t.Equals (Args.EXPORT_LIMIT)).FirstOrDefault () != null)
-            {
-                // Reaching the index of the "Export-Limit" parameter received
-                int limitIndex = GetArgumentIndex (args, Args.EXPORT_LIMIT) + 1;
-
-                // Converting it to Int32
-                _limit = Convert.ToInt32 (args[limitIndex]);
-            }         
-            else // No Limit, Initializes it with -1
-            {
-                _limit = -1;
-            }
-
-            // Checking for the "AddHeaders" Parameter
-            if (args.Where (t => t.Equals (Args.ADD_HEADERS)).FirstOrDefault() != null)
-            {
-                _addHeaders = true;
-            }
-            else
-            {
-                _addHeaders = false;
-            }
-        }
-        
         /// <summary>
         /// Checks the minimum parameters of this application
         /// </summary>
         /// <returns></returns>
-        private static bool ValidateConfig ()
+        private static bool ValidateConfig (FlexibleOptions options)
         {
-            if (String.IsNullOrEmpty (_sourceServer) 
-             || String.IsNullOrEmpty (_sourceUsername)
-             || String.IsNullOrEmpty (_sourcePassword)
-             || String.IsNullOrEmpty (_sourceDatabase))
+            if (String.IsNullOrEmpty (options["sourceServer"]) 
+             || String.IsNullOrEmpty (options["sourceUsername"])
+             || String.IsNullOrEmpty (options["sourcePassword"])
+             || String.IsNullOrEmpty (options["sourceDatabaseName"]))
             {
                 return false;
             }
 
             return true;
         }
-
-        /// <summary>
-        /// Prints the application parameters
-        /// </summary>
-        private static void PrintHelp ()
-        {
-            Console.WriteLine ("***********************************");
-            Console.WriteLine ("List of Parameters");
-            Console.WriteLine ("\t-h : Shows Help");
-            Console.WriteLine ("\t-format (defaults to 'JSON'): Either 'CSV' or 'JSON' is accepted");
-            Console.WriteLine ("\t-collection : Name of the collection that will be exported (no default value here. This is mandatory)");
-            Console.WriteLine ("\t-export-config-path : In case your export is 'CSV', this is needed. It's not needed for JSON exports");
-            Console.WriteLine ("***********************************");
-        }
-
-        /// <summary>
-        /// Prints the current configuration of the process.
-        /// Enables double checking of the user before executing it
-        /// </summary>
-        private static void PrintConfiguration ()
-        {
-            Console.WriteLine ("=============================================================");
-            Console.WriteLine ("Format:"      + _exportFormat);
-            Console.WriteLine ("Collection:"  + _mongoCollection);
-            Console.WriteLine ("Layout File:" + _layoutPath);
-            Console.WriteLine ("=============================================================\n\n");
-        }
-
-        /// <summary>
-        /// Gets the Index of the received argument (by key) within
-        /// the array of arguments
-        /// </summary>
-        /// <param name="args">Array of Arguments</param>
-        /// <param name="argName">Key (name) of the argument searched</param>
-        /// <returns>Index of the argument within array. -1 if not found</returns>
-        private static int GetArgumentIndex (string[] args, string argName)
-        {
-            for (int i = 0; i <= args.Count (); i++)
-            {
-                if (args[i].Equals (argName))
-                {
-                    return i;
-                }
-            }
-
-            // Not Found
-            return -1;
-        }              
     }
 }
