@@ -106,13 +106,13 @@ namespace MongoToolsLib
                         // process task
                         mgr.AddTask (new CopyInfo
                         {
-                            SourceDatabase = db.Item1,
-                            TargetDatabase = db.Item2,
+                            SourceDatabase   = db.Item1,
+                            TargetDatabase   = db.Item2,
                             SourceCollection = col,
                             TargetCollection = col,
-                            BatchSize = insertBatchSize,
-                            CopyIndexes = copyIndexes,
-                            DropCollections = dropCollections
+                            BatchSize        = insertBatchSize,
+                            CopyIndexes      = copyIndexes,
+                            DropCollections  = dropCollections
                         });
                     }                    
                 }

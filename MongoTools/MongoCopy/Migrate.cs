@@ -277,7 +277,7 @@ namespace MongoCopy
             }
             else
             {
-                options.Set ("target", MongoDbContext.BuildConnectionString (_sourceUsername, _sourcePassword, true, true, _sourceServer, 30000, 4 * 60000, _sourceAuthDatabase));
+                options.Set ("target", MongoDbContext.BuildConnectionString (_targetUsername, _targetPassword, true, true, _targetServer, 30000, 4 * 60000, _targetAuthDatabase));
             }
 
             // check connection
