@@ -30,7 +30,7 @@ namespace MongoToolsLib
                 targetDatabases = null;
 
             // check if we are on the same server!
-            bool sameServer = sourceServer.Primary.GetIPEndPoint ().Address.ToString() == targetServer.Primary.GetIPEndPoint ().Address.ToString();
+            bool sameServer = ServersAreEqual (sourceServer, targetServer);
 
             for (int i = 0; i < sourceDatabases.Count; i++)
             {
@@ -54,6 +54,30 @@ namespace MongoToolsLib
                     yield return Tuple.Create (sourceServer.GetDatabase (sourceDatabases[i]), targetServer.GetDatabase (targetDatabases[i]));
                 }
             }
+        }
+ 
+        private static bool ServersAreEqual (MongoServer sourceServer, MongoServer targetServer)
+        {
+            // check if we are on the same server!            
+            try
+            {
+                // check using get ip endpoint of the primary server and port
+                if (sourceServer.Primary != null && targetServer.Primary != null)
+                    return sourceServer.Primary.GetIPEndPoint ().Address.ToString () == targetServer.Primary.GetIPEndPoint ().Address.ToString () &&
+                        sourceServer.Primary.Address.Port == targetServer.Primary.Address.Port;
+            }
+            catch {}
+
+            try
+            {
+                // fallback to comparing the host names and port
+                if (sourceServer.Instance != null && targetServer.Instance != null)
+                    return sourceServer.Instance.Address.Host.Equals (targetServer.Instance.Address.Host, StringComparison.OrdinalIgnoreCase) &&
+                           sourceServer.Instance.Address.Port == targetServer.Instance.Address.Port;
+            }
+            catch {}
+
+            return false;
         }
 
         static IEnumerable<string> ListCollections (MongoDatabase sourceServer, List<string> collections)
