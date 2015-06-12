@@ -1,6 +1,6 @@
 #region *   License     *
 /*
-    SimpleHelpers - ConsoleUtils   
+    SimpleHelpers - FlexibleOptions   
 
     Copyright © 2015 Khalid Salomão
 
@@ -32,9 +32,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Export.SimpleHelpers
 {

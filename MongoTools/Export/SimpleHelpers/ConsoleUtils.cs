@@ -56,7 +56,7 @@ namespace Export.SimpleHelpers
 
             ProgramOptions = CheckCommandLineParams (args, thrownOnError);
 
-            if (ProgramOptions.Get<bool> ("help", false))
+            if (ProgramOptions.Get<bool> ("help", false) || ProgramOptions.Get<bool> ("h", false))
             {
                 show_help ("");
                 CloseApplication (0, true);
@@ -68,6 +68,14 @@ namespace Export.SimpleHelpers
                 ConsoleUtils.DisplayHeader (
                     typeof(ConsoleUtils).Namespace.Replace(".SimpleHelpers", ""),
                     "options: " + (ProgramOptions == null ? "none" : "\n#    " + String.Join ("\n#    ", ProgramOptions.Options.Select (i => i.Key + "=" + i.Value))));
+            }
+            else
+            {
+                var logger = LogManager.GetCurrentClassLogger ();
+                if (logger.IsDebugEnabled)
+                {
+                    logger.Debug ("options: " + (ProgramOptions == null ? "none" : "\n#    " + String.Join ("\n#    ", ProgramOptions.Options.Select (i => i.Key + "=" + i.Value))));
+                }
             }
 
             return ProgramOptions;
@@ -90,7 +98,6 @@ namespace Export.SimpleHelpers
             // more concurrent connections to the same IP (avoid throttling) and other tuning
             // http://blogs.msdn.com/b/jpsanders/archive/2009/05/20/understanding-maxservicepointidletime-and-defaultconnectionlimit.aspx
             System.Net.ServicePointManager.DefaultConnectionLimit = 1024; // more concurrent connections to the same IP (avoid throttling)
-            System.Net.ServicePointManager.MaxServicePointIdleTime = 30 * 1000; // release unused connections sooner (30 seconds)
         }
 
         static string _logFileName;
@@ -271,33 +278,34 @@ namespace Export.SimpleHelpers
             if (args != null)
             {
                 string arg;
+                bool openTag = false;
                 string lastTag = null;
                 for (int ix = 0; ix < args.Length; ix++)
                 {
                     arg = args[ix];
-                    // check for option with key=value sintax
+                    // check for option with key=value sintax (restriction: the previous tag must not be an open tag)
                     // also valid for --key:value
+                    bool hasStartingMarker = arg.StartsWith ("-", StringComparison.Ordinal) || arg.StartsWith ("/", StringComparison.Ordinal);
                     int p = arg.IndexOf ('=');
-                    if (p > 0)
+                    if (p > 0 && (hasStartingMarker || !openTag))
                     {
                         argsOptions.Set (arg.Substring (0, p).Trim ().TrimStart ('-', '/'), arg.Substring (p + 1).Trim ());
                         lastTag = null;
-                        continue;
-                    }
-                    
+                        openTag = false;
+                    }                    
                     // search for tag stating with special character
-                    if (arg.StartsWith ("-", StringComparison.Ordinal) || arg.StartsWith ("/", StringComparison.Ordinal))
+                    else if (hasStartingMarker)
                     {
                         lastTag = arg.Trim ().TrimStart ('-', '/');
                         argsOptions.Set (lastTag, "true");
-                        continue;
+                        openTag = true;
                     }
-
                     // set value of last tag
-                    if (lastTag != null)
+                    else if (lastTag != null)
                     {
                         argsOptions.Set (lastTag, arg.Trim ());
-                    }
+                        openTag = false;
+                    }                    
                 }
             }
             return argsOptions;
@@ -386,9 +394,11 @@ namespace Export.SimpleHelpers
 
         private static void show_help (string message, bool isError = false)
         {
-            var files = new string[] { "Help.md", "Configuration.md" };
-            var file = "README.md";
+            // files with help text in order of priority
+            var files = new string[] { "help", "help.txt", "Configuration.md", "README.md" };
             var text = "Help command line arguments";
+            string file = files.FirstOrDefault ();
+            // check which file exists
             foreach (var f in files)
             {
                 if (System.IO.File.Exists (f))
@@ -400,21 +410,22 @@ namespace Export.SimpleHelpers
                     file = ".docs/" + f; break;
                 }
             }
-
+            // try to load help text
             if (System.IO.File.Exists (file))
                 text = ReadFileAllText (file);
-            if (message == null) return;
+
+            // display message parameter
             if (isError)
             {
-                Console.Error.WriteLine (message);
-                Console.Error.WriteLine (text);
+                Console.Error.WriteLine (message);                
             }
             else
             {
                 Console.WriteLine (message);
-                Console.WriteLine (text);
             }
-            CloseApplication (0, true);
+            
+            // display help text
+            Console.Error.WriteLine (text);
         }
 
         public static string ReadFileAllText (string filename)
