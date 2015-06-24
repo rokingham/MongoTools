@@ -207,7 +207,7 @@ namespace MongoCopy
             }            
 
             // check collections parameter
-            _collections = ParseArgumentAsList (options, Args.COLLECTIONS);
+            _collections = ParseArgumentAsList (options, "collections");
         }
 
         private static void CheckConnections (FlexibleOptions options)

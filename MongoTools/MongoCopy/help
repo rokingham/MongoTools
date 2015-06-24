@@ -27,12 +27,7 @@ List of Parameters
 	-threads : number of concurrent collections copy. One collection per thread. Defaults to 1.
 	-copy-indexes : Indexes will be copied if this is received. Defaults to true.
 	-drop-collections: If received, will force drop into each collection before copying the data
-
-	-full : Copies full database	
-	-collections : If received this will be used instead of full database copy. Format: "col1,col2,col3"
-	-collections-mask : mask of the collection name. Format: "col1,col2,col3"
-
-
+	
 	-collections : If received this will be used instead of full database copy. Format: "col1,col2,col3*"
 	
 ##########################################
