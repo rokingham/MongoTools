@@ -29,5 +29,13 @@ List of Parameters
 	-drop-collections: If received, will force drop into each collection before copying the data
 	
 	-collections : If received this will be used instead of full database copy. Format: "col1,col2,col3*"
-	
+
+Mono example:
+
+	mono MongoCopy.exe -copy-indexes -threads 2 -source "mongodb://user:psw@127.0.0.1/admin" -target "mongodb://user:psw@new.server.com:27017/admin" -sourceDatabase testDb -collections "test_*"
+
+Windows example:
+
+	MongoCopy.exe -copy-indexes -threads 2 -source "mongodb://user:psw@127.0.0.1/admin" -target "mongodb://user:psw@new.server.com:27017/admin" -sourceDatabase testDb -collections "test_*"
+
 ##########################################
