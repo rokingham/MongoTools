@@ -23,10 +23,7 @@ namespace MongoToolsLib
         {
             var logger = NLog.LogManager.GetLogger ("CopyCollection");
             try
-            {                
-                // Local Buffer
-                List<BsonDocument> buffer = new List<BsonDocument> (insertBatchSize);
-
+            {   
                 // Resets Counter
                 long count = 0;
                 int loop = 0;
@@ -66,11 +63,13 @@ namespace MongoToolsLib
                         // also benchmarks didn't show any benefit for batches larger than 100...
                         if (insertBatchSize > 200)
                             insertBatchSize = 200;
+
+                        logger.Debug ("{0}.{1} - Insert batch size: {2}", sourceDatabase.Name, sourceCollection.Name, insertBatchSize);
                     }
                 }
                 catch (Exception ex)
                 {
-                    logger.Warn ("Cannot get collection statistics... continuing any way. " + sourceCollection.Name, ex);
+                    logger.Warn (ex, "Cannot get collection statistics... continuing any way. {0}.{1}", sourceDatabase.Name, sourceCollection.Name);
                 }
 
                 // Checking for the need to drop the collection before adding data to it
@@ -82,10 +81,15 @@ namespace MongoToolsLib
                     }
                     catch (Exception ex)
                     {
-                        logger.Warn ("Cannot drop collection " + targetCollection.Name, ex);
+                        logger.Warn (ex, "Cannot drop target collection {0}.{1}", targetDatabase.Name, targetCollection.Name);
                         return;
                     }
                 }
+
+                // Local Buffer
+                List<BsonDocument> buffer = new List<BsonDocument> (insertBatchSize);
+
+                var total = sourceCollection.Count ();
 
                 // Running Copy
                 foreach (BsonDocument i in SafeQuery (sourceCollection, "_id"))
@@ -101,9 +105,9 @@ namespace MongoToolsLib
                         try
                         {
                             targetCollection.SafeInsertBatch (buffer, 3, true, true);
-                            if (loop++ % 100 == 1)
+                            if (loop++ % 100 == 0)
                             {
-                                logger.Debug ("progress {0}.{1} : {2} ", sourceDatabase.Name, sourceCollection, count);
+                                logger.Debug ("{0}.{1} - batch size: {2}, progress: {3} / {4} ({5}) ", sourceDatabase.Name, sourceCollection.Name, insertBatchSize, count, total, ((double)count / total).ToString ("0.0%"));
                             }
                         }
                         catch (Exception ex)
@@ -121,7 +125,7 @@ namespace MongoToolsLib
                     try
                     {
                         targetCollection.SafeInsertBatch (buffer, 3, true, true);
-                        logger.Debug ("progress {0}.{1} : {2} ", sourceDatabase.Name, sourceCollection, count);
+                        logger.Debug ("{0}.{1} - batch size: {2}, progress: {3} / {4} ({5}) ", sourceDatabase.Name, sourceCollection.Name, insertBatchSize, count, total, ((double)count / total).ToString ("0.0%"));
                     }
                     catch (Exception ex)
                     {
@@ -133,7 +137,7 @@ namespace MongoToolsLib
                 // Checkign for the need to copy indexes aswell
                 if (copyIndexes)
                 {
-                    logger.Debug ("start index creation {0}.{1} ", sourceDatabase.Name, sourceCollection);
+                    logger.Debug ("start index creation {0}.{1} ", sourceDatabase.Name, sourceCollection.Name);
                     // Copying Indexes - If Any
                     foreach (IndexInfo idx in sourceCollection.GetIndexes ().ToList ())
                     {
@@ -161,7 +165,7 @@ namespace MongoToolsLib
                         }
                         catch (Exception ex)
                         {
-                            logger.Error ("Error creating index " + idx.Name, ex);
+                            logger.Error (ex, "Error creating index " + idx.Name);
                         }                        
                     }
                     logger.Debug ("index creation completed {0}.{1} ", sourceDatabase.Name, sourceCollection);
@@ -169,7 +173,7 @@ namespace MongoToolsLib
             }
             catch (Exception ex)
             {
-                logger.Error ("Error copying collection " + sourceCollectionName, ex);
+                logger.Error (ex, "Error copying collection " + sourceCollectionName);
                 return;
             }
         }
