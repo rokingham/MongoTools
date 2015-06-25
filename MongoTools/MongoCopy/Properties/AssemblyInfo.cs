@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle ("MongoCopy")]
-[assembly: AssemblyDescription ("")]
+[assembly: AssemblyDescription ("MongoTools application to copy MongoDb databases and collections")]
 [assembly: AssemblyConfiguration ("")]
 [assembly: AssemblyCompany ("")]
 [assembly: AssemblyProduct ("MongoCopy")]
