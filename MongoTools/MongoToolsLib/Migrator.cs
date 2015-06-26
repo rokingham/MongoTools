@@ -82,25 +82,12 @@ namespace MongoToolsLib
 
         static IEnumerable<string> ListCollections (MongoDatabase sourceServer, List<string> collections)
         {
-            if (collections == null || collections.Count == 0)
+            var list = sourceServer.GetCollectionNames ();
+            if (collections != null && collections.Count > 0)
             {
-                foreach (var c in sourceServer.GetCollectionNames ().ToList ())
-                    yield return c;
+                list = list.Where (c => collections.Any (pattern => SharedMethods.WildcardIsMatch (pattern, c, true)));
             }
-            else if (!collections.Any (c => SharedMethods.HasWildcard (c)))
-            {
-                // check collections without wildcards
-                foreach (var c in collections)
-                    yield return c;
-            }
-            else
-            {
-                foreach (var c in sourceServer.GetCollectionNames ())
-                {
-                    if (collections.Any (pattern => SharedMethods.WildcardIsMatch (pattern, c, true)))
-                        yield return c;
-                }               
-            }            
+            return list.ToList ();               
         }
 
         /// <summary>
@@ -146,9 +133,6 @@ namespace MongoToolsLib
 
         static void CollectionCopy (CopyInfo item)
         {
-            // Console Feedback
-            Console.WriteLine ("Copying collection: " + item.SourceDatabase.Name + "." + item.SourceCollection);
-
             SharedMethods.CopyCollection (item.SourceDatabase, item.TargetDatabase, item.SourceCollection, item.TargetCollection, item.BatchSize, item.CopyIndexes, item.DropCollections);
         }
 

@@ -36,13 +36,15 @@ namespace MongoToolsLib
                 if (sourceCollection.FullName.IndexOf ("system.", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     return;
-                }
+                }               
 
                 if (!sourceCollection.Exists ())
                 {
-                    logger.Warn ("Collection not found " + sourceDatabase.Name + "." + sourceCollectionName);
+                    logger.Warn ("{0}.{1} - Collection not found ", sourceDatabase.Name, sourceCollectionName);
                     return;
                 }
+
+                logger.Debug ("{0}.{1} - Start collection copy.", sourceDatabase.Name, sourceCollectionName);
 
                 try
                 {
@@ -50,7 +52,7 @@ namespace MongoToolsLib
                     // since this is a special type of collection, we will skip it
                     if (sourceCollection.IsCapped ())
                     {
-                        logger.Warn ("Skiping capped collection " + sourceDatabase.Name + "." + sourceCollectionName);
+                        logger.Warn ("{0}.{1} - Skiping capped collection (feature not implemented)", sourceDatabase.Name, sourceCollectionName);
                         return;
                     }
 
@@ -69,7 +71,7 @@ namespace MongoToolsLib
                 }
                 catch (Exception ex)
                 {
-                    logger.Warn (ex, "Cannot get collection statistics... continuing any way. {0}.{1}", sourceDatabase.Name, sourceCollection.Name);
+                    logger.Warn (ex, "{0}.{1} - Failed to get collection statistics... continuing any way...", sourceDatabase.Name, sourceCollection.Name);
                 }
 
                 // Checking for the need to drop the collection before adding data to it
@@ -78,10 +80,11 @@ namespace MongoToolsLib
                     try
                     {
                         targetCollection.Drop ();
+                        logger.Debug ("{0}.{1} - Target collection droped: {2}.{3}.", sourceDatabase.Name, sourceCollectionName, targetDatabase.Name, targetCollection.Name);
                     }
                     catch (Exception ex)
                     {
-                        logger.Warn (ex, "Cannot drop target collection {0}.{1}", targetDatabase.Name, targetCollection.Name);
+                        logger.Error (ex, "{0}.{1} - Failed to drop target collection {2}.{3}, aborting collection copy...", sourceDatabase.Name, sourceCollectionName, targetDatabase.Name, targetCollection.Name);
                         return;
                     }
                 }
@@ -137,7 +140,7 @@ namespace MongoToolsLib
                 // Checkign for the need to copy indexes aswell
                 if (copyIndexes)
                 {
-                    logger.Debug ("start index creation {0}.{1} ", sourceDatabase.Name, sourceCollection.Name);
+                    logger.Debug ("{0}.{1} - Start index creation", sourceDatabase.Name, sourceCollection.Name);
                     // Copying Indexes - If Any
                     foreach (IndexInfo idx in sourceCollection.GetIndexes ().ToList ())
                     {
@@ -156,7 +159,7 @@ namespace MongoToolsLib
                             opts.SetTimeToLive (idx.TimeToLive);
                         }
 
-                        logger.Debug ("creating index {0}.{1} : {2}", sourceDatabase.Name, sourceCollection, idx.Name);
+                        logger.Debug ("{0}.{1} - Creating index: {2}", sourceDatabase.Name, sourceCollection, idx.Name);
 
                         // Adding Index
                         try
@@ -165,15 +168,36 @@ namespace MongoToolsLib
                         }
                         catch (Exception ex)
                         {
-                            logger.Error (ex, "Error creating index " + idx.Name);
+                            // check for timeout exception that may occur if the collection is large...
+                            if (ex is System.IO.IOException || ex is System.Net.Sockets.SocketException || (ex.InnerException != null && ex.InnerException is System.Net.Sockets.SocketException))
+                            {
+                                logger.Warn ("{0}.{1} - Timeout creating index {2}, this may occur in large collections. You should check manually after a while.", sourceDatabase.Name, sourceCollection.Name, idx.Name);
+                                // wait for index creation....
+                                for (var i = 0; i < 30; i++)
+                                {
+                                    System.Threading.Thread.Sleep (10000);
+                                    try
+                                    {
+                                        if (targetCollection.IndexExists (idx.Name))
+                                            break;
+                                    } catch {}
+                                }
+                            }
+                            else
+                            {
+                                logger.Error (ex, "{0}.{1} - Error creating index {2}" + idx.Name);                                
+                            }
+                            logger.Warn ("{0}.{1} - Index details: {2}", sourceDatabase.Name, sourceCollection.Name, idx.ToJson ());
                         }                        
                     }
-                    logger.Debug ("index creation completed {0}.{1} ", sourceDatabase.Name, sourceCollection);
+                    logger.Debug ("{0}.{1} - Index creation completed", sourceDatabase.Name, sourceCollection);
                 }
+
+                logger.Info ("{0}.{1} - Collection copy completed.", sourceDatabase.Name, sourceCollectionName);
             }
             catch (Exception ex)
             {
-                logger.Error (ex, "Error copying collection " + sourceCollectionName);
+                logger.Error (ex, "{0}.{1} - Error copying collection ", sourceDatabase.Name, sourceCollectionName ?? "");
                 return;
             }
         }
@@ -195,7 +219,7 @@ namespace MongoToolsLib
                 IMongoQuery finalQuery = null;
                 if (last != null && last.Contains (indexField))
                 {
-                    finalQuery = Query.And (query, Query.GT (indexField, last[indexField]));                    
+                    finalQuery = query != null ? Query.And (query, Query.GT (indexField, last[indexField])) : Query.GT (indexField, last[indexField]);
                 }
                 else
                 {
@@ -220,12 +244,12 @@ namespace MongoToolsLib
                     }
                     catch (Exception ex)
                     {
-                        logger.Warn (ex.Message + ". try {0} of {1}. Last index: {2}", errorCount, 5, last != null && last.Contains (indexField) ? last[indexField].ToJson () : "");
+                        logger.Warn ("{0} - {1}.. try {0} of {1}. Last id: {2}", sourceCollection, ex.Message, errorCount, 5, last != null && last.Contains (indexField) ? last[indexField].ToJson () : "");
                         // if 5 consecutive errors... throw
                         if (errorCount++ > 4)
                             throw;                        
                         // else lets wait a while before retrying...
-                        System.Threading.Thread.Sleep (2000);
+                        System.Threading.Thread.Sleep (2500);
                         break;
                     }
                     
