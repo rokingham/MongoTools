@@ -108,7 +108,7 @@ namespace MongoToolsLib
                         try
                         {
                             targetCollection.SafeInsertBatch (buffer, 3, true, true);
-                            if (loop++ % 100 == 0)
+                            if (loop++ % 150 == 0)
                             {
                                 logger.Debug ("{0}.{1} - batch size: {2}, progress: {3} / {4} ({5}) ", sourceDatabase.Name, sourceCollection.Name, insertBatchSize, count, total, ((double)count / total).ToString ("0.0%"));
                             }
