@@ -71,7 +71,9 @@
     <Compile Include="SimpleHelpers\ParallelTasks.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Configuration.md" />
+    <None Include="Configuration.md">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
