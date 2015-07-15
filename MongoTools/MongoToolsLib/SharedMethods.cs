@@ -89,6 +89,8 @@ namespace MongoToolsLib
                     }
                 }
 
+                // sanity check
+                if (insertBatchSize <= 0) insertBatchSize = 100;
                 // Local Buffer
                 List<BsonDocument> buffer = new List<BsonDocument> (insertBatchSize);
 
@@ -271,7 +273,7 @@ namespace MongoToolsLib
         {
             if (pattern == null)
                 return false;
-            return (pattern.IndexOf ('*') > 0 || pattern.IndexOf ('?') > 0);
+            return (pattern.IndexOf ('*') >= 0 || pattern.IndexOf ('?') >= 0);
         }
 
         public static bool WildcardIsMatch (string pattern, string input, bool ignoreCase = true)
