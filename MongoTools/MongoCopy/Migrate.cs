@@ -57,6 +57,7 @@ namespace MongoCopy
         // Arguments
         private static bool               _copyIndexes;
         private static bool               _dropCollections;
+        private static bool               _skipExisting;
         private static List<String> _collections = new List<String> ();
         private static List<String> _sourceDatabases = new List<String> ();
         private static List<String> _targetDatabases = new List<String> ();        
@@ -115,7 +116,9 @@ namespace MongoCopy
             // process list
             logger.Debug ("Start migrating data...");
 
-            Migrator.DatabaseCopy (sourceDatabase, targetDatabase, _sourceDatabases, _targetDatabases, _collections, _insertBatchSize, _copyIndexes, _dropCollections, _threads);            
+            Migrator.DatabaseCopy (sourceDatabase, targetDatabase, _sourceDatabases, _targetDatabases, _collections, _insertBatchSize, _copyIndexes, _dropCollections, _threads, options);
+
+            System.Threading.Thread.Sleep (1000);
 
             logger.Debug ("Done migrating data!");
         }        
@@ -142,8 +145,9 @@ namespace MongoCopy
             _insertBatchSize = options.Get ("insertBatchSize", -1);
             _threads = options.Get ("threads", 1);
 
-            _copyIndexes = options.Get ("copy-indexes", true);
+            _copyIndexes = options.Get ("copy-indexes", false);
             _dropCollections = options.Get ("drop-collections", false);
+            _skipExisting = options.Get ("skip-existing", false);
 
             // check parameter databases
             _sourceDatabases = ParseArgumentAsList (options, "sourceDatabase");

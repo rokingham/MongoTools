@@ -26,8 +26,12 @@ List of Parameters
 	-insertBatchSize : Size of the insert batch operation. Defaults to -1 (auto).
 	-threads : number of concurrent collections copy. One collection per thread. Defaults to 1.
 	-copy-indexes : Indexes will be copied if this is received. Defaults to true.
-	-drop-collections: If received, will force drop into each collection before copying the data
-	
+	-copy-indexes-before : Indexes will be copied before records copy. Defaults to false.
+	-drop-collections : If received, will force drop into each collection before copying the data
+	-skip-existing : If the target database already have the collection and this collection has any document, skipt it.
+	-resume : try to resume operation by recovering last _id in target collection. Defaults to false.
+	-if-smaller : only copies a collection if source collection has more records than target collection. Defaults to false.
+
 	-collections : If received this will be used instead of full database copy. Format: "col1,col2,col3*"
 
 Mono example:

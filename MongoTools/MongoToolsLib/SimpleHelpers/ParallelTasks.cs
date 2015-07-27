@@ -260,14 +260,14 @@ namespace MongoToolsLib.SimpleHelpers
         /// <param name="waitForWorkToFinish">The wait for work to finish.</param>
         public void Close (bool waitForWorkToFinish)
         {
+            StopMaintenance ();
             if (m_tasks != null)
             {
                 // signal that there is no more items
                 m_tasks.CompleteAdding ();
 
                 // check thread creation task
-                ExecuteMaintenance (null);
-                StopMaintenance ();
+                ExecuteMaintenance (null);                
 
                 // wait for work completion
                 if (waitForWorkToFinish)

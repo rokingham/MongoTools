@@ -1,11 +1,13 @@
 ﻿using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoDB.Driver.Builders;
+using MongoToolsLib.SimpleHelpers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using NLog;
 
 namespace MongoToolsLib
 {
@@ -19,11 +21,14 @@ namespace MongoToolsLib
         /// <param name="buffer"></param>
         /// <param name="sourceCollection"></param>
         /// <param name="insertBatchSize"></param>
-        public static void CopyCollection (MongoDatabase sourceDatabase, MongoDatabase targetDatabase, string sourceCollectionName, string targetCollectionName = "", int insertBatchSize = -1, bool copyIndexes = false, bool dropCollections = false)
+        public static void CopyCollection (MongoDatabase sourceDatabase, MongoDatabase targetDatabase, string sourceCollectionName, string targetCollectionName = "", int insertBatchSize = -1, bool copyIndexes = false, bool dropCollections = false, FlexibleOptions options = null)
         {
             var logger = NLog.LogManager.GetLogger ("CopyCollection");
             try
             {   
+                if (options == null) options = new FlexibleOptions();
+
+                BsonDocument last = null;
                 // Resets Counter
                 long count = 0;
                 int loop = 0;
@@ -46,6 +51,10 @@ namespace MongoToolsLib
 
                 logger.Debug ("{0}.{1} - Start collection copy.", sourceDatabase.Name, sourceCollectionName);
 
+                // get total records in source
+                var total = sourceCollection.Count ();
+
+                // check stats
                 try
                 {
                     // check if collection is capped collection
@@ -74,30 +83,60 @@ namespace MongoToolsLib
                     logger.Warn (ex, "{0}.{1} - Failed to get collection statistics... continuing any way...", sourceDatabase.Name, sourceCollection.Name);
                 }
 
+                // sanity check
+                if (insertBatchSize <= 0) insertBatchSize = 100;
+                
                 // Checking for the need to drop the collection before adding data to it
-                if (dropCollections && targetCollection.Exists ())
+                if (targetCollection.Exists ())
                 {
-                    try
+                    long targetCount = targetCollection.Count ();
+                    if (options.Get ("skip-existing", false) && targetCount > 0)
                     {
-                        targetCollection.Drop ();
-                        logger.Debug ("{0}.{1} - Target collection droped: {2}.{3}.", sourceDatabase.Name, sourceCollectionName, targetDatabase.Name, targetCollection.Name);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.Error (ex, "{0}.{1} - Failed to drop target collection {2}.{3}, aborting collection copy...", sourceDatabase.Name, sourceCollectionName, targetDatabase.Name, targetCollection.Name);
+                        logger.Info ("{0}.{1} - Collection found in target database, skipping... [flag 'skip-existing']", sourceDatabase.Name, sourceCollectionName);
                         return;
+                    }
+
+                    if (options.Get ("resume", false))
+                    {
+                        last = targetCollection.Find (null).SetSortOrder (SortBy.Descending ("_id")).SetFields ("_id").SetLimit (1).FirstOrDefault ();
+                        if (last != null)
+                        {
+                            logger.Debug ("{0}.{1} - Resuming collection copy, last _id: {2}", sourceDatabase.Name, sourceCollectionName, last["_id"]);
+                            count = targetCount;
+                        }
+                    }
+
+                    if (options.Get ("if-smaller", false) && targetCount >= total)
+                    {
+                        logger.Debug ("{0}.{1} - Collection of same size or larger, skipping... [flag 'if-smaller']", sourceDatabase.Name, sourceCollectionName, last["_id"]);
+                        return;
+                    }
+
+                    if (dropCollections && last == null)
+                    {
+                        try
+                        {
+                            targetCollection.Drop ();
+                            logger.Debug ("{0}.{1} - Target collection droped: {2}.{3}.", sourceDatabase.Name, sourceCollectionName, targetDatabase.Name, targetCollection.Name);
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.Error (ex, "{0}.{1} - Failed to drop target collection {2}.{3}, aborting collection copy...", sourceDatabase.Name, sourceCollectionName, targetDatabase.Name, targetCollection.Name);
+                            return;
+                        }
                     }
                 }
 
-                // sanity check
-                if (insertBatchSize <= 0) insertBatchSize = 100;
-                // Local Buffer
-                List<BsonDocument> buffer = new List<BsonDocument> (insertBatchSize);
+                if (options.Get ("copy-indexes-before", false))
+                {
+                    CreateIndexes (sourceCollection, targetCollection);
+                }
 
-                var total = sourceCollection.Count ();
+                // Local Buffer
+                List<BsonDocument> buffer = new List<BsonDocument> (insertBatchSize);                
 
                 // Running Copy
-                foreach (BsonDocument i in SafeQuery (sourceCollection, "_id"))
+                foreach (BsonDocument i in SafeQuery (sourceCollection, "_id", null, last))
                 {
                     // Feedback and Local Buffer
                     count++;
@@ -140,59 +179,9 @@ namespace MongoToolsLib
                 }
 
                 // Checkign for the need to copy indexes aswell
-                if (copyIndexes)
+                if (copyIndexes && !options.Get ("copy-indexes-before", false))
                 {
-                    logger.Debug ("{0}.{1} - Start index creation", sourceDatabase.Name, sourceCollection.Name);
-                    // Copying Indexes - If Any
-                    foreach (IndexInfo idx in sourceCollection.GetIndexes ().ToList ())
-                    {
-                        // Skipping "_id_" default index - Since Every mongodb Collection has it
-                        if (idx.Name == "_id_")
-                        {
-                            continue;
-                        }
-
-                        // Recreating Index Options based on the current index options
-                        var opts = IndexOptions.SetBackground (idx.IsBackground)
-                                       .SetSparse (idx.IsSparse).SetUnique (idx.IsUnique).SetName (idx.Name).SetDropDups (idx.DroppedDups);
-
-                        if (idx.TimeToLive < TimeSpan.MaxValue)
-                        {
-                            opts.SetTimeToLive (idx.TimeToLive);
-                        }
-
-                        logger.Debug ("{0}.{1} - Creating index: {2}", sourceDatabase.Name, sourceCollection, idx.Name);
-
-                        // Adding Index
-                        try
-                        {
-                            targetCollection.CreateIndex (idx.Key, opts);
-                        }
-                        catch (Exception ex)
-                        {
-                            // check for timeout exception that may occur if the collection is large...
-                            if (ex is System.IO.IOException || ex is System.Net.Sockets.SocketException || (ex.InnerException != null && ex.InnerException is System.Net.Sockets.SocketException))
-                            {
-                                logger.Warn ("{0}.{1} - Timeout creating index {2}, this may occur in large collections. You should check manually after a while.", sourceDatabase.Name, sourceCollection.Name, idx.Name);
-                                // wait for index creation....
-                                for (var i = 0; i < 30; i++)
-                                {
-                                    System.Threading.Thread.Sleep (10000);
-                                    try
-                                    {
-                                        if (targetCollection.IndexExists (idx.Name))
-                                            break;
-                                    } catch {}
-                                }
-                            }
-                            else
-                            {
-                                logger.Error (ex, "{0}.{1} - Error creating index {2}" + idx.Name);                                
-                            }
-                            logger.Warn ("{0}.{1} - Index details: {2}", sourceDatabase.Name, sourceCollection.Name, idx.ToJson ());
-                        }                        
-                    }
-                    logger.Debug ("{0}.{1} - Index creation completed", sourceDatabase.Name, sourceCollection);
+                    CreateIndexes (sourceCollection, targetCollection);
                 }
 
                 logger.Info ("{0}.{1} - Collection copy completed.", sourceDatabase.Name, sourceCollectionName);
@@ -203,13 +192,111 @@ namespace MongoToolsLib
                 return;
             }
         }
+ 
+        private static void CreateIndexes (MongoCollection<BsonDocument> sourceCollection, MongoCollection<BsonDocument> targetCollection)
+        {
+            var logger = NLog.LogManager.GetLogger ("CreateIndexes");
+            logger.Debug ("{0}.{1} - Start index creation", sourceCollection.Database.Name, sourceCollection.Name);
 
-        private static IEnumerable<BsonDocument> SafeQuery (MongoCollection<BsonDocument> sourceCollection, string indexField = "_id", IMongoQuery query = null)
+            var command = new CommandDocument ();
+            command.Add ("createIndexes", targetCollection.Name);
+            var indexList = new BsonArray ();
+            command.Add ("indexes", indexList);
+
+            // Copying Indexes - If Any
+            foreach (IndexInfo idx in sourceCollection.GetIndexes ().ToList ())
+            {
+                // Skipping "_id_" default index - Since Every mongodb Collection has it
+                if (idx.Name == "_id_")
+                {
+                    continue;
+                }
+
+                // Recreating Index Options based on the current index options
+                var opts = IndexOptions.SetBackground (idx.IsBackground)
+                               .SetSparse (idx.IsSparse).SetUnique (idx.IsUnique).SetName (idx.Name).SetDropDups (idx.DroppedDups);
+
+                if (idx.TimeToLive < TimeSpan.MaxValue)
+                {
+                    opts.SetTimeToLive (idx.TimeToLive);
+                }
+
+                // Adding Index
+                try
+                {
+                    if (targetCollection.Database.Server.BuildInfo.Version.Major < 2 && targetCollection.Database.Server.BuildInfo.Version.MajorRevision < 6)
+                    {
+                        logger.Debug ("{0}.{1} - Creating index: {2}", sourceCollection.Database.Name, sourceCollection, idx.Name);
+                        targetCollection.CreateIndex (idx.Key, opts);                                
+                    }
+                    else 
+                    {
+                        logger.Debug ("{0}.{1} - Prepare index creation: {2}", sourceCollection.Database.Name, sourceCollection, idx.Name);
+                        // removes the namespace to allow mongodb to generate the correct one...
+                        var doc = idx.RawDocument;
+                        doc.Remove ("ns");
+                        indexList.Add (doc);                                
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // check for timeout exception that may occur if the collection is large...
+                    if (ex is System.IO.IOException || ex is System.Net.Sockets.SocketException || (ex.InnerException != null && ex.InnerException is System.Net.Sockets.SocketException))
+                    {
+                        logger.Warn ("{0}.{1} - Timeout creating index {2}, this may occur in large collections. You should check manually after a while.", sourceCollection.Database.Name, sourceCollection.Name, idx.Name);
+                        // wait for index creation....
+                        for (var i = 0; i < 30; i++)
+                        {
+                            System.Threading.Thread.Sleep (10000);
+                            try
+                            {
+                                if (targetCollection.IndexExists (idx.Name))
+                                    break;
+                            }
+                            catch
+                            {
+                            }
+                        }
+                    }
+                    else
+                    {
+                        logger.Error (ex, "{0}.{1} - Error creating index {2}" + idx.Name);                                
+                    }
+                    logger.Warn ("{0}.{1} - Index details: {2}", sourceCollection.Database.Name, sourceCollection.Name, idx.RawDocument.ToJson ());
+                }
+            }
+
+            if (indexList.Count > 0)
+            {
+                try
+                {
+                    logger.Debug ("{0}.{1} - Creating {2} indexes", sourceCollection.Database.Name, sourceCollection, indexList.Count);
+                    targetCollection.Database.RunCommand (command);
+                }
+                catch (Exception ex)
+                {
+                    // check for timeout exception that may occur if the collection is large...
+                    if (ex is System.IO.IOException || ex is System.Net.Sockets.SocketException || (ex.InnerException != null && ex.InnerException is System.Net.Sockets.SocketException))
+                    {
+                        logger.Warn ("{0}.{1} - Timeout creating {2} indexes, this may occur in large collections. You should check manually after a while.", sourceCollection.Database.Name, sourceCollection.Name, indexList.Count);
+                        logger.Warn ("{0}.{1} - Index details: {2}", sourceCollection.Database.Name, sourceCollection.Name, command.ToJson ());
+                    }
+                    else
+                    {
+                        logger.Error (ex, "{0}.{1} - Error creating indexes");
+                        logger.Error ("{0}.{1} - Index details: {2}", sourceCollection.Database.Name, sourceCollection.Name, command.ToJson ());
+                    }
+                }
+            }
+
+            logger.Debug ("{0}.{1} - Index creation completed", sourceCollection.Database.Name, sourceCollection);
+        }
+
+        private static IEnumerable<BsonDocument> SafeQuery (MongoCollection<BsonDocument> sourceCollection, string indexField = "_id", IMongoQuery query = null, BsonDocument last = null)
         {
             var logger = NLog.LogManager.GetLogger ("Query");
             int errorCount = 0;
             bool running = true;
-            BsonDocument last = null;
             IEnumerator<BsonDocument> cursor;
 
             if (String.IsNullOrEmpty (indexField))

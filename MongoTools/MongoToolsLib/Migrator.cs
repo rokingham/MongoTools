@@ -1,6 +1,7 @@
 ﻿using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoDB.Driver.Builders;
+using MongoToolsLib.SimpleHelpers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,6 +21,7 @@ namespace MongoToolsLib
             public int BatchSize { get; set; }
             public bool CopyIndexes { get; set; } 
             public bool DropCollections { get; set; }
+            public FlexibleOptions Options { get; set; } 
         }
 
         static IEnumerable<Tuple<MongoDatabase,MongoDatabase>> ListDatabases (MongoServer sourceServer, MongoServer targetServer, List<string> sourceDatabases, List<string> targetDatabases)
@@ -31,27 +33,32 @@ namespace MongoToolsLib
 
             // check if we are on the same server!
             bool sameServer = ServersAreEqual (sourceServer, targetServer);
+            
+            // prepare available databases list
+            var availableDatabases = new Dictionary<string, string> (StringComparer.OrdinalIgnoreCase);
+            foreach (var db in sourceServer.GetDatabaseNames ())
+            {
+                availableDatabases[db] = db;
+            }
 
+            // create mappings
             for (int i = 0; i < sourceDatabases.Count; i++)
             {
-                if (SharedMethods.HasWildcard (sourceDatabases[i]))
+                if (targetDatabases == null || SharedMethods.HasWildcard (sourceDatabases[i]))
                 {
                     if (sameServer)
                         throw new Exception ("Source and target servers are the same!");
-                    foreach (var db in sourceServer.GetDatabaseNames ().Where (name => SharedMethods.WildcardIsMatch (sourceDatabases[i], name, true)))
+                    foreach (var db in availableDatabases.Values.Where (name => SharedMethods.WildcardIsMatch (sourceDatabases[i], name, true)))
                     {
                         yield return Tuple.Create (sourceServer.GetDatabase (db), targetServer.GetDatabase (db));                            
                     }
                 }
-                else if (targetDatabases == null)
-                {
-                    if (sameServer)
-                        throw new Exception ("Source and target servers are the same!");
-                    yield return Tuple.Create (sourceServer.GetDatabase (sourceDatabases[i]), targetServer.GetDatabase (sourceDatabases[i]));
-                }
                 else
                 {
-                    yield return Tuple.Create (sourceServer.GetDatabase (sourceDatabases[i]), targetServer.GetDatabase (targetDatabases[i]));
+                    string db;
+                    if (!availableDatabases.TryGetValue (sourceDatabases[i], out db))
+                        continue;
+                    yield return Tuple.Create (sourceServer.GetDatabase (db), targetServer.GetDatabase (targetDatabases[i]));
                 }
             }
         }
@@ -102,7 +109,7 @@ namespace MongoToolsLib
         /// <param name="copyIndexes">True if the indexes should be copied aswell, false otherwise.</param>
         /// <param name="dropCollections">The drop collections.</param>
         /// <param name="threads">The threads.</param>
-        public static void DatabaseCopy (MongoServer sourceServer, MongoServer targetServer, List<string> sourceDatabases, List<string> targetDatabases, List<string> collections, int insertBatchSize = -1, bool copyIndexes = true, bool dropCollections = false, int threads = 1)
+        public static void DatabaseCopy (MongoServer sourceServer, MongoServer targetServer, List<string> sourceDatabases, List<string> targetDatabases, List<string> collections, int insertBatchSize = -1, bool copyIndexes = true, bool dropCollections = false, int threads = 1, FlexibleOptions options = null)
         {
             if (threads <= 1)
                 threads = 1;
@@ -123,7 +130,8 @@ namespace MongoToolsLib
                             TargetCollection = col,
                             BatchSize        = insertBatchSize,
                             CopyIndexes      = copyIndexes,
-                            DropCollections  = dropCollections
+                            DropCollections  = dropCollections,
+                            Options          = options
                         });
                     }                    
                 }
@@ -133,7 +141,7 @@ namespace MongoToolsLib
 
         static void CollectionCopy (CopyInfo item)
         {
-            SharedMethods.CopyCollection (item.SourceDatabase, item.TargetDatabase, item.SourceCollection, item.TargetCollection, item.BatchSize, item.CopyIndexes, item.DropCollections);
+            SharedMethods.CopyCollection (item.SourceDatabase, item.TargetDatabase, item.SourceCollection, item.TargetCollection, item.BatchSize, item.CopyIndexes, item.DropCollections, item.Options);
         }
 
         /// <summary>
@@ -143,14 +151,14 @@ namespace MongoToolsLib
         /// <param name="targetDatabase">Target database - Where the data will go to</param>
         /// <param name="insertBatchSize">Size (in records) of the chunk of data that will be inserted per batch</param>
         /// <param name="copyIndexes">True if the indexes should be copied aswell, false otherwise</param>
-        public static void DatabaseCopy (MongoDatabase sourceDatabase, MongoDatabase targetDatabase, int insertBatchSize = -1, bool copyIndexes = true, bool dropCollections = false, int threads = 1)
+        public static void DatabaseCopy (MongoDatabase sourceDatabase, MongoDatabase targetDatabase, int insertBatchSize = -1, bool copyIndexes = true, bool dropCollections = false, int threads = 1, FlexibleOptions options = null)
         {
             var collections = sourceDatabase.GetCollectionNames ().ToList ();
             if (threads <= 1)
             {
                 foreach (var collectionName in collections)
                 {
-                    SharedMethods.CopyCollection (sourceDatabase, targetDatabase, collectionName, String.Empty, insertBatchSize, copyIndexes, dropCollections);                    
+                    SharedMethods.CopyCollection (sourceDatabase, targetDatabase, collectionName, String.Empty, insertBatchSize, copyIndexes, dropCollections, options);                    
                 }
             }
             else
@@ -161,7 +169,7 @@ namespace MongoToolsLib
                     // Console Feedback
                     Console.WriteLine ("Migrating Collection : " + collectionName);
 
-                    SharedMethods.CopyCollection (sourceDatabase, targetDatabase, collectionName, String.Empty, insertBatchSize, copyIndexes, dropCollections);
+                    SharedMethods.CopyCollection (sourceDatabase, targetDatabase, collectionName, String.Empty, insertBatchSize, copyIndexes, dropCollections, options);
                 });
             }
         }
