@@ -13,6 +13,7 @@ namespace MongoToolsLib
 {
     public class SharedMethods
     {
+        static HashSet<string> valid_wt_compressors = new HashSet<string>  (StringComparer.OrdinalIgnoreCase) { "", "zlib", "snappy" };
         /// <summary>
         /// Copies a certain collection from one database to the other, including Indexes
         /// </summary>
@@ -84,7 +85,7 @@ namespace MongoToolsLib
                 }
 
                 // sanity check
-                if (insertBatchSize <= 0) insertBatchSize = 100;
+                if (insertBatchSize <= 0) insertBatchSize = 100;                
                 
                 // Checking for the need to drop the collection before adding data to it
                 if (targetCollection.Exists ())
@@ -127,9 +128,11 @@ namespace MongoToolsLib
                     }
                 }
 
+                CreateCollection (sourceCollection, targetCollection, options);
+
                 if (options.Get ("copy-indexes-before", false))
                 {
-                    CreateIndexes (sourceCollection, targetCollection);
+                    CreateIndexes (sourceCollection, targetCollection, options);
                 }
 
                 // Local Buffer
@@ -181,7 +184,7 @@ namespace MongoToolsLib
                 // Checkign for the need to copy indexes aswell
                 if (copyIndexes && !options.Get ("copy-indexes-before", false))
                 {
-                    CreateIndexes (sourceCollection, targetCollection);
+                    CreateIndexes (sourceCollection, targetCollection, options);
                 }
 
                 logger.Info ("{0}.{1} - Collection copy completed.", sourceDatabase.Name, sourceCollectionName);
@@ -192,9 +195,52 @@ namespace MongoToolsLib
                 return;
             }
         }
- 
-        private static void CreateIndexes (MongoCollection<BsonDocument> sourceCollection, MongoCollection<BsonDocument> targetCollection)
+
+        private static void CreateCollection (MongoCollection<BsonDocument> sourceCollection, MongoCollection<BsonDocument> targetCollection, FlexibleOptions options)
         {
+            BsonDocument storageEngineDoc = null;
+            if (options.HasOption ("collection-wt-block-compressor") && valid_wt_compressors.Contains (options.Get ("collection-wt-block-compressor", "")))
+            {
+                if (storageEngineDoc == null) storageEngineDoc = new BsonDocument ("wiredTiger", new BsonDocument ("configString", ""));
+                storageEngineDoc["wiredTiger"]["configString"] += ",block_compressor=" + options.Get ("collection-wt-block-compressor", "").ToLowerInvariant ();
+            }
+
+            if (!String.IsNullOrEmpty (options.Get ("collection-wt-block-compressor")))
+            {
+                if (storageEngineDoc == null) storageEngineDoc = new BsonDocument ("wiredTiger", new BsonDocument ("configString", ""));
+                // Mongodb version 3.0.4 defaults to: "allocation_size=4KB,internal_page_max=4KB,leaf_page_max=32KB,leaf_value_max=1MB"
+                if (options.Get ("collection-wt-allocation") == "2x")
+                {   
+                    storageEngineDoc["wiredTiger"]["configString"] += ",allocation_size=8KB,leaf_page_max=64KB,internal_page_max=8KB";
+                }
+                else if (options.Get ("collection-wt-allocation") == "4x")
+                {
+                    storageEngineDoc["wiredTiger"]["configString"] += ",allocation_size=16KB,leaf_page_max=64KB,internal_page_max=8KB";
+                }
+                else if (options.Get ("collection-wt-allocation") == "8x")
+                {
+                    storageEngineDoc["wiredTiger"]["configString"] += ",allocation_size=32KB,leaf_page_max=128KB,internal_page_max=16KB";
+                }
+            }
+
+            if (storageEngineDoc != null)
+            {                
+                storageEngineDoc["wiredTiger"]["configString"] = storageEngineDoc["wiredTiger"]["configString"].ToString ().Trim (' ', ',');
+            }
+
+            try
+            {
+                targetCollection.Database.CreateCollection (targetCollection.Name, CollectionOptions.SetStorageEngineOptions (storageEngineDoc));                
+            }
+            catch (Exception ex)
+            {
+                NLog.LogManager.GetLogger ("CreateCollection").Error (ex);
+            }            
+        }
+
+        private static void CreateIndexes (MongoCollection<BsonDocument> sourceCollection, MongoCollection<BsonDocument> targetCollection, FlexibleOptions options)
+        {
+            if (options == null) options = new FlexibleOptions ();
             var logger = NLog.LogManager.GetLogger ("CreateIndexes");
             logger.Debug ("{0}.{1} - Start index creation", sourceCollection.Database.Name, sourceCollection.Name);
 
@@ -213,8 +259,9 @@ namespace MongoToolsLib
                 }
 
                 // Recreating Index Options based on the current index options
-                var opts = IndexOptions.SetBackground (idx.IsBackground)
-                               .SetSparse (idx.IsSparse).SetUnique (idx.IsUnique).SetName (idx.Name).SetDropDups (idx.DroppedDups);
+                var opts = IndexOptions.SetBackground (idx.IsBackground || options.Get ("indexes-background", false))
+                               .SetSparse (idx.IsSparse || options.Get ("indexes-sparse", false))
+                               .SetUnique (idx.IsUnique).SetName (idx.Name).SetDropDups (idx.DroppedDups);
 
                 if (idx.TimeToLive < TimeSpan.MaxValue)
                 {
@@ -235,6 +282,10 @@ namespace MongoToolsLib
                         // removes the namespace to allow mongodb to generate the correct one...
                         var doc = idx.RawDocument;
                         doc.Remove ("ns");
+                        if (options.Get ("indexes-background", false))
+                            doc["background"] = true;
+                        if (options.Get ("indexes-sparse", false))
+                            doc["sparse"] = true;
                         indexList.Add (doc);                                
                     }
                 }

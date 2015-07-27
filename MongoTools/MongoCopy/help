@@ -22,6 +22,8 @@ List of Parameters
 	
 	-sourceDatabase : name of the database.	Format: "db1,db2,db3,db_2015*".
 	-targetDatabase : name of the database. Format: "db1,db2,db3,db_2015*". Defaults to sourceDatabase name.  
+	
+	-collections : If received this will be used instead of full database copy. Format: "col1,col2,col3*"
 
 	-insertBatchSize : Size of the insert batch operation. Defaults to -1 (auto).
 	-threads : number of concurrent collections copy. One collection per thread. Defaults to 1.
@@ -32,7 +34,12 @@ List of Parameters
 	-resume : try to resume operation by recovering last _id in target collection. Defaults to false.
 	-if-smaller : only copies a collection if source collection has more records than target collection. Defaults to false.
 
-	-collections : If received this will be used instead of full database copy. Format: "col1,col2,col3*"
+	-indexes-background : forces all copied indexes to have the background flag.
+	-indexes-sparse : forces all copied indexes to have the sparse flag.
+
+	-collection-wt-block-compressor : wiredTiger configuration option for collection block compressor. Values: "", "zlib", "snappy".
+	-collection-wt-allocation : wiredTiger configuration option to increase page allocation size for this collection. Values: "2x", "4x", "8x".
+	
 
 Mono example:
 
