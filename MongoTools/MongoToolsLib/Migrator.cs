@@ -33,34 +33,47 @@ namespace MongoToolsLib
 
             // check if we are on the same server!
             bool sameServer = ServersAreEqual (sourceServer, targetServer);
-            
+
             // prepare available databases list
-            var availableDatabases = new Dictionary<string, string> (StringComparer.OrdinalIgnoreCase);
-            foreach (var db in sourceServer.GetDatabaseNames ())
-            {
-                availableDatabases[db] = db;
-            }
+            var databases = sourceServer.GetDatabaseNames ().ToList ();
+            var availableDatabases = new HashSet<string> (databases, StringComparer.Ordinal);            
 
             // create mappings
-            for (int i = 0; i < sourceDatabases.Count; i++)
+            if (targetDatabases == null)
             {
-                if (targetDatabases == null || SharedMethods.HasWildcard (sourceDatabases[i]))
+                for (int i = 0; i < sourceDatabases.Count; i++)
                 {
-                    if (sameServer)
-                        throw new Exception ("Source and target servers are the same!");
-                    foreach (var db in availableDatabases.Values.Where (name => SharedMethods.WildcardIsMatch (sourceDatabases[i], name, true)))
+                    string k = sourceDatabases[i];
+                    if (k.IndexOf ('=') > 0)
                     {
-                        yield return Tuple.Create (sourceServer.GetDatabase (db), targetServer.GetDatabase (db));                            
+                        var split = k.Split ('=');
+                        k = split[0];
+                        var db = availableDatabases.Contains (k) ? k : databases.FirstOrDefault (name => k.Equals (name, StringComparison.OrdinalIgnoreCase));
+                        // check if database was found
+                        if (db == null) continue;
+                        yield return Tuple.Create (sourceServer.GetDatabase (db), targetServer.GetDatabase (split[1]));
                     }
-                }
-                else
-                {
-                    string db;
-                    if (!availableDatabases.TryGetValue (sourceDatabases[i], out db))
-                        continue;
-                    yield return Tuple.Create (sourceServer.GetDatabase (db), targetServer.GetDatabase (targetDatabases[i]));
+                    else
+                    {
+                        foreach (var db in databases.Where (name => SharedMethods.WildcardIsMatch (k, name, true)))
+                        {
+                            yield return Tuple.Create (sourceServer.GetDatabase (db), targetServer.GetDatabase (db));
+                        }
+                    }                    
                 }
             }
+            else
+            {
+                // match
+                for (int i = 0; i < sourceDatabases.Count; i++)
+                {
+                    string k = sourceDatabases[i];
+                    var db = availableDatabases.Contains (k) ? k : databases.FirstOrDefault (name => k.Equals (name, StringComparison.OrdinalIgnoreCase));
+                    // check if database was found
+                    if (db == null) continue;
+                    yield return Tuple.Create (sourceServer.GetDatabase (db), targetServer.GetDatabase (targetDatabases[i]));
+                }                
+            }            
         }
  
         private static bool ServersAreEqual (MongoServer sourceServer, MongoServer targetServer)
@@ -87,14 +100,38 @@ namespace MongoToolsLib
             return false;
         }
 
-        static IEnumerable<string> ListCollections (MongoDatabase sourceServer, List<string> collections)
-        {
-            var list = sourceServer.GetCollectionNames ();
-            if (collections != null && collections.Count > 0)
+        static IEnumerable<Tuple<string,string>> ListCollections (MongoDatabase sourceServer, List<string> collections)
+        {            
+            if (collections == null || collections.Count == 0)
             {
-                list = list.Where (c => collections.Any (pattern => SharedMethods.WildcardIsMatch (pattern, c, true)));
+                foreach (var c in sourceServer.GetCollectionNames ())
+                    yield return Tuple.Create (c, c);
             }
-            return list.ToList ();               
+            else
+            {
+                var list = sourceServer.GetCollectionNames ().ToList ();
+                var hashOrdinal = new HashSet<string> (list, StringComparer.Ordinal);
+                foreach (var c in collections)
+                {
+                    if (hashOrdinal.Contains (c))
+                    {
+                        yield return Tuple.Create (c, c);
+                    }
+                    else if (c.IndexOf ('=') > 0)
+                    {
+                        var split = c.Split ('=');
+                        var k = split[0];
+                        var col = hashOrdinal.Contains (k) ? k : hashOrdinal.FirstOrDefault (name => k.Equals (name, StringComparison.OrdinalIgnoreCase));
+                        if (col != null)
+                            yield return Tuple.Create (col, split[1]);
+                    }
+                    else
+                    {
+                        foreach (var col in list.Where (pattern => SharedMethods.WildcardIsMatch (pattern, c, true)))
+                            yield return Tuple.Create (col, col);
+                    }
+                }                
+            }   
         }
 
         /// <summary>
@@ -114,26 +151,38 @@ namespace MongoToolsLib
             if (threads <= 1)
                 threads = 1;
 
+            // check if we are on the same server!
+            bool sameServer = ServersAreEqual (sourceServer, targetServer);
+
+            // create our thread manager and start producing tasks...
             using (var mgr = new MongoToolsLib.SimpleHelpers.ParallelTasks<CopyInfo> (0, threads, 1000, CollectionCopy))
             {
                 // list databases
-                foreach (var db in ListDatabases(sourceServer, targetServer, sourceDatabases, targetDatabases))
+                foreach (var db in ListDatabases (sourceServer, targetServer, sourceDatabases, targetDatabases))
                 {
                     foreach (var col in ListCollections (db.Item1, collections))
                     {
+                        // sanity checks
+                        if (sameServer && db.Item1 == db.Item2 && col.Item1 == col.Item2)
+                        {
+                            NLog.LogManager.GetLogger ("DatabaseCopy").Warn ("Skiping collection, since it would be copied to itself! Database: {0}, Collection: {1}", db.Item1, col.Item1);
+                            continue;
+                            //throw new Exception ("Source and target servers and databases are the same!");                            
+                        }
+
                         // process task
                         mgr.AddTask (new CopyInfo
                         {
                             SourceDatabase   = db.Item1,
                             TargetDatabase   = db.Item2,
-                            SourceCollection = col,
-                            TargetCollection = col,
+                            SourceCollection = col.Item1,
+                            TargetCollection = col.Item2,
                             BatchSize        = insertBatchSize,
                             CopyIndexes      = copyIndexes,
                             DropCollections  = dropCollections,
                             Options          = options
                         });
-                    }                    
+                    }
                 }
                 mgr.CloseAndWait ();
             }

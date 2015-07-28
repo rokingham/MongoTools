@@ -113,6 +113,11 @@ namespace MongoToolsLib
                         return;
                     }
 
+                    // if the collection is empty and we have collection options, drop it
+                    if (HasCollectionCreationOptions (options) && targetCount == 0)
+                        dropCollections = true;
+
+                    // check if we should drop the collection
                     if (dropCollections && last == null)
                     {
                         try
@@ -128,8 +133,10 @@ namespace MongoToolsLib
                     }
                 }
 
+                // try to create the collection
                 CreateCollection (sourceCollection, targetCollection, options);
 
+                // index creation
                 if (options.Get ("copy-indexes-before", false))
                 {
                     CreateIndexes (sourceCollection, targetCollection, options);
@@ -160,7 +167,9 @@ namespace MongoToolsLib
                         catch (Exception ex)
                         {
                             logger.Error (ex);
-                            System.Threading.Thread.Sleep (100);
+                            System.Threading.Thread.Sleep (1000);
+                            // try again, but whithout try catch to hide the exception this time...
+                            targetCollection.SafeInsertBatch (buffer, 3, true, true);
                         }
                         buffer.Clear ();
                     }
@@ -196,8 +205,17 @@ namespace MongoToolsLib
             }
         }
 
+        private static bool HasCollectionCreationOptions (FlexibleOptions options)
+        {
+            return (options.HasOption ("collection-wt-block-compressor") && valid_wt_compressors.Contains (options.Get ("collection-wt-block-compressor", ""))) ||
+                   (!String.IsNullOrEmpty (options.Get ("collection-wt-allocation")));
+        }
+
         private static void CreateCollection (MongoCollection<BsonDocument> sourceCollection, MongoCollection<BsonDocument> targetCollection, FlexibleOptions options)
         {
+            if (targetCollection.Exists ())
+                return;
+
             BsonDocument storageEngineDoc = null;
             if (options.HasOption ("collection-wt-block-compressor") && valid_wt_compressors.Contains (options.Get ("collection-wt-block-compressor", "")))
             {
@@ -205,7 +223,7 @@ namespace MongoToolsLib
                 storageEngineDoc["wiredTiger"]["configString"] += ",block_compressor=" + options.Get ("collection-wt-block-compressor", "").ToLowerInvariant ();
             }
 
-            if (!String.IsNullOrEmpty (options.Get ("collection-wt-block-compressor")))
+            if (!String.IsNullOrEmpty (options.Get ("collection-wt-allocation")))
             {
                 if (storageEngineDoc == null) storageEngineDoc = new BsonDocument ("wiredTiger", new BsonDocument ("configString", ""));
                 // Mongodb version 3.0.4 defaults to: "allocation_size=4KB,internal_page_max=4KB,leaf_page_max=32KB,leaf_value_max=1MB"
@@ -215,17 +233,22 @@ namespace MongoToolsLib
                 }
                 else if (options.Get ("collection-wt-allocation") == "4x")
                 {
-                    storageEngineDoc["wiredTiger"]["configString"] += ",allocation_size=16KB,leaf_page_max=64KB,internal_page_max=8KB";
+                    storageEngineDoc["wiredTiger"]["configString"] += ",allocation_size=16KB,leaf_page_max=64KB,internal_page_max=16KB";
                 }
                 else if (options.Get ("collection-wt-allocation") == "8x")
                 {
-                    storageEngineDoc["wiredTiger"]["configString"] += ",allocation_size=32KB,leaf_page_max=128KB,internal_page_max=16KB";
+                    storageEngineDoc["wiredTiger"]["configString"] += ",allocation_size=32KB,leaf_page_max=128KB,internal_page_max=32KB";
                 }
             }
 
             if (storageEngineDoc != null)
             {                
                 storageEngineDoc["wiredTiger"]["configString"] = storageEngineDoc["wiredTiger"]["configString"].ToString ().Trim (' ', ',');
+            }
+            else
+            {
+                // if there is no special option, there is no need to create collection...
+                return;
             }
 
             try
@@ -384,7 +407,7 @@ namespace MongoToolsLib
                     }
                     catch (Exception ex)
                     {
-                        logger.Warn ("{0} - {1}.. try {0} of {1}. Last id: {2}", sourceCollection, ex.Message, errorCount, 5, last != null && last.Contains (indexField) ? last[indexField].ToJson () : "");
+                        logger.Warn ("{0} - {1}.. try {0} of {1}. Last id: {2}", sourceCollection, ex.Message, errorCount, 5, (last != null && last.Contains (indexField)) ? last[indexField].ToString () : "");
                         // if 5 consecutive errors... throw
                         if (errorCount++ > 4)
                             throw;                        

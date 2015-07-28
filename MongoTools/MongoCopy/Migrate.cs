@@ -142,7 +142,7 @@ namespace MongoCopy
             _targetPassword = options["targetPassword"];
             _targetAuthDatabase = options.Get ("targetAuthDatabase", options["authDatabaseNameTarget"]);
 
-            _insertBatchSize = options.Get ("insertBatchSize", -1);
+            _insertBatchSize =  options.Get ("batch-size", options.Get ("insertBatchSize", -1));
             _threads = options.Get ("threads", 1);
 
             _copyIndexes = options.Get ("copy-indexes", false);
@@ -150,8 +150,11 @@ namespace MongoCopy
             _skipExisting = options.Get ("skip-existing", false);
 
             // check parameter databases
-            _sourceDatabases = ParseArgumentAsList (options, "sourceDatabase");
+            _sourceDatabases = ParseArgumentAsList (options, "databases").Concat (ParseArgumentAsList (options, "sourceDatabase")).Distinct ().ToList ();
             _targetDatabases = ParseArgumentAsList (options, "targetDatabase");
+
+            // check collections parameter
+            _collections = ParseArgumentAsList (options, "collections");
 
             //*******************
             //** sanity checks **
@@ -172,7 +175,7 @@ namespace MongoCopy
 
             if (_sourceDatabases.Count == 0)
             {
-                logger.Error ("No database selected: use the argument 'sourceDatabase' to provide a list of databases");
+                logger.Error ("No database selected: use the argument 'databases' to provide a list of databases");
                 ConsoleUtils.CloseApplication (-103, true);
             }
 
@@ -201,17 +204,18 @@ namespace MongoCopy
                 }
 
                 // 2. check for database mapping discrepancy
-                // TODO: allow copying from multiple databases to a single database...
                 if (_sourceDatabases.Count != _targetDatabases.Count)
                 {
-                    logger.Error ("Different number of source and target databases detected: use the argument 'sourceDatabase' and 'targetDatabases' to provide a list of databases");
+                    logger.Error ("Different number of source and target databases detected: use the argument 'databases' and 'targetDatabases' to provide a list of databases");
                     ConsoleUtils.CloseApplication (-106, true);
                 }
-                
-            }            
 
-            // check collections parameter
-            _collections = ParseArgumentAsList (options, "collections");
+                if (_sourceDatabases.Any (i => i.IndexOf ('=') > 0))
+                {
+                    logger.Error ("Invalid use of target database parameter: if the argument 'databases' has a key=value format to indicate the target database name, the argument 'targetDatabases' cannot be used.");
+                    ConsoleUtils.CloseApplication (-106, true);
+                }
+            }
         }
 
         private static void CheckConnections (FlexibleOptions options)

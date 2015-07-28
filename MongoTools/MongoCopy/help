@@ -20,12 +20,12 @@ List of Parameters
 	-targetUsername : target MongoDb server credentials.
 	-targetPassword : target MongoDb server credentials.
 	
-	-sourceDatabase : name of the database.	Format: "db1,db2,db3,db_2015*".
+	-databases : name of the database. Alias "sourceDatabase". Format: "db1,db2,db3,db_2015*". Alternative format: "source1=target1,source2=target2,source3*"
 	-targetDatabase : name of the database. Format: "db1,db2,db3,db_2015*". Defaults to sourceDatabase name.  
 	
-	-collections : If received this will be used instead of full database copy. Format: "col1,col2,col3*"
+	-collections : If received this will be used instead of full database copy. Format: "col1,col2,col3*". Alternative format: "source1=target1,source2=target2,source3*".
 
-	-insertBatchSize : Size of the insert batch operation. Defaults to -1 (auto).
+	-batch-size : Size of the insert batch operation. Defaults to -1 (auto). Alias: "insertBatchSize"
 	-threads : number of concurrent collections copy. One collection per thread. Defaults to 1.
 	-copy-indexes : Indexes will be copied if this is received. Defaults to true.
 	-copy-indexes-before : Indexes will be copied before records copy. Defaults to false.
@@ -38,8 +38,7 @@ List of Parameters
 	-indexes-sparse : forces all copied indexes to have the sparse flag.
 
 	-collection-wt-block-compressor : wiredTiger configuration option for collection block compressor. Values: "", "zlib", "snappy".
-	-collection-wt-allocation : wiredTiger configuration option to increase page allocation size for this collection. Values: "2x", "4x", "8x".
-	
+	-collection-wt-allocation : wiredTiger configuration option to increase page allocation size for this collection. Values: "2x", "4x", "8x".	
 
 Mono example:
 
