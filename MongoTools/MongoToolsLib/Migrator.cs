@@ -50,7 +50,7 @@ namespace MongoToolsLib
                         k = split[0];
                         var db = availableDatabases.Contains (k) ? k : databases.FirstOrDefault (name => k.Equals (name, StringComparison.OrdinalIgnoreCase));
                         // check if database was found
-                        if (db == null) continue;
+                        if (String.IsNullOrEmpty (db) || String.IsNullOrEmpty (split[1])) continue;
                         yield return Tuple.Create (sourceServer.GetDatabase (db), targetServer.GetDatabase (split[1]));
                     }
                     else
@@ -70,7 +70,7 @@ namespace MongoToolsLib
                     string k = sourceDatabases[i];
                     var db = availableDatabases.Contains (k) ? k : databases.FirstOrDefault (name => k.Equals (name, StringComparison.OrdinalIgnoreCase));
                     // check if database was found
-                    if (db == null) continue;
+                    if (String.IsNullOrEmpty (db) || String.IsNullOrEmpty (targetDatabases[i])) continue;
                     yield return Tuple.Create (sourceServer.GetDatabase (db), targetServer.GetDatabase (targetDatabases[i]));
                 }                
             }            
@@ -121,13 +121,13 @@ namespace MongoToolsLib
                     {
                         var split = c.Split ('=');
                         var k = split[0];
-                        var col = hashOrdinal.Contains (k) ? k : hashOrdinal.FirstOrDefault (name => k.Equals (name, StringComparison.OrdinalIgnoreCase));
-                        if (col != null)
+                        var col = hashOrdinal.Contains (k) ? k : list.FirstOrDefault (name => k.Equals (name, StringComparison.OrdinalIgnoreCase));
+                        if (!String.IsNullOrEmpty (col) && !String.IsNullOrEmpty (split[1]))
                             yield return Tuple.Create (col, split[1]);
                     }
                     else
                     {
-                        foreach (var col in list.Where (pattern => SharedMethods.WildcardIsMatch (pattern, c, true)))
+                        foreach (var col in list.Where (name => SharedMethods.WildcardIsMatch (c, name, true)))
                             yield return Tuple.Create (col, col);
                     }
                 }                

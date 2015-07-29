@@ -39,7 +39,9 @@ namespace MongoToolsLib
                 var targetCollection = targetDatabase.GetCollection (String.IsNullOrEmpty (targetCollectionName) ? sourceCollectionName : targetCollectionName);
 
                 // Skipping System Collections - For Safety Reasons
-                if (sourceCollection.FullName.IndexOf ("system.", StringComparison.OrdinalIgnoreCase) >= 0)
+                if (sourceCollection.FullName.IndexOf ("system.", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    sourceCollection.Database.Name.Equals ("system", StringComparison.OrdinalIgnoreCase) ||
+                    sourceCollection.Database.Name.Equals ("local", StringComparison.OrdinalIgnoreCase))
                 {
                     return;
                 }               
@@ -207,7 +209,7 @@ namespace MongoToolsLib
 
         private static bool HasCollectionCreationOptions (FlexibleOptions options)
         {
-            return (options.HasOption ("collection-wt-block-compressor") && valid_wt_compressors.Contains (options.Get ("collection-wt-block-compressor", ""))) ||
+            return (options.HasOption ("collection-wt-block-compressor") && valid_wt_compressors.Contains (options.Get ("collection-wt-block-compressor", "invalid"))) ||
                    (!String.IsNullOrEmpty (options.Get ("collection-wt-allocation")));
         }
 
@@ -217,7 +219,7 @@ namespace MongoToolsLib
                 return;
 
             BsonDocument storageEngineDoc = null;
-            if (options.HasOption ("collection-wt-block-compressor") && valid_wt_compressors.Contains (options.Get ("collection-wt-block-compressor", "")))
+            if (options.HasOption ("collection-wt-block-compressor") && valid_wt_compressors.Contains (options.Get ("collection-wt-block-compressor", "invalid")))
             {
                 if (storageEngineDoc == null) storageEngineDoc = new BsonDocument ("wiredTiger", new BsonDocument ("configString", ""));
                 storageEngineDoc["wiredTiger"]["configString"] += ",block_compressor=" + options.Get ("collection-wt-block-compressor", "").ToLowerInvariant ();
