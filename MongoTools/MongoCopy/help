@@ -1,5 +1,6 @@
 ﻿##########################################
-List of Parameters
+List of Parameters 
+Note: parameters are case insensitive
 
 	-h | -help : Shows Help
 	-logLevel : change the verbosity of log messages written to the logfile. Defaults to Info. Values = [Trace, Debug, Info, Warn, Error, Fatal]
@@ -33,12 +34,14 @@ List of Parameters
 	-skip-existing : If the target database already have the collection and this collection has any document, skipt it.
 	-resume : try to resume operation by recovering last _id in target collection. Defaults to false.
 	-if-smaller : only copies a collection if source collection has more records than target collection. Defaults to false.
+	-lazy-wait : wait between each insert batch operation. Time in milliseconds.
 
 	-indexes-background : forces all copied indexes to have the background flag.
 	-indexes-sparse : forces all copied indexes to have the sparse flag.
 
 	-collection-wt-block-compressor : wiredTiger configuration option for collection block compressor. Values: "", "zlib", "snappy".
-	-collection-wt-allocation : wiredTiger configuration option to increase page allocation size for this collection. Values: "2x", "4x", "8x".	
+	-collection-wt-allocation : wiredTiger configuration option to increase page allocation size for this collection. Values: "2x", "4x", "8x".
+	-collection-wt-configString : full wiredTiger configuration string to be passed as "wiredTiger.configString" parameter in the collection creation. 	
 
 Mono example:
 

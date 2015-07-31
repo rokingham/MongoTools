@@ -144,6 +144,9 @@ namespace MongoToolsLib
                     CreateIndexes (sourceCollection, targetCollection, options);
                 }
 
+                // check for lazy copy options
+                int waitTime = options.Get ("lazy-wait", -1);
+
                 // Local Buffer
                 List<BsonDocument> buffer = new List<BsonDocument> (insertBatchSize);                
 
@@ -164,6 +167,10 @@ namespace MongoToolsLib
                             if (loop++ % 150 == 0)
                             {
                                 logger.Debug ("{0}.{1} - batch size: {2}, progress: {3} / {4} ({5}) ", sourceDatabase.Name, sourceCollection.Name, insertBatchSize, count, total, ((double)count / total).ToString ("0.0%"));
+                            }
+                            if (waitTime > -1)
+                            {
+                                System.Threading.Thread.Sleep (waitTime);
                             }
                         }
                         catch (Exception ex)
@@ -218,49 +225,66 @@ namespace MongoToolsLib
             if (targetCollection.Exists ())
                 return;
 
-            BsonDocument storageEngineDoc = null;
-            if (options.HasOption ("collection-wt-block-compressor") && valid_wt_compressors.Contains (options.Get ("collection-wt-block-compressor", "invalid")))
+            List<string> config = new List<string> ();
+            if (!String.IsNullOrWhiteSpace (options.Get ("collection-wt-configString")))
             {
-                if (storageEngineDoc == null) storageEngineDoc = new BsonDocument ("wiredTiger", new BsonDocument ("configString", ""));
-                storageEngineDoc["wiredTiger"]["configString"] += ",block_compressor=" + options.Get ("collection-wt-block-compressor", "").ToLowerInvariant ();
+                config.AddRange (options.Get ("collection-wt-configString", "").Split (',').Select (i => i.Trim ()).Where (i => !String.IsNullOrEmpty (i)));                
             }
 
-            if (!String.IsNullOrEmpty (options.Get ("collection-wt-allocation")))
+            if (options.HasOption ("collection-wt-block-compressor") && valid_wt_compressors.Contains (options.Get ("collection-wt-block-compressor", "invalid")))
             {
-                if (storageEngineDoc == null) storageEngineDoc = new BsonDocument ("wiredTiger", new BsonDocument ("configString", ""));
+                config.RemoveAll (i => i.StartsWith ("block_compressor=", StringComparison.OrdinalIgnoreCase));
+                config.Add ("block_compressor=" + options.Get ("collection-wt-block-compressor", "").ToLowerInvariant ());
+            }
+
+            if (!String.IsNullOrWhiteSpace (options.Get ("collection-wt-allocation")))
+            {
                 // Mongodb version 3.0.4 defaults to: "allocation_size=4KB,internal_page_max=4KB,leaf_page_max=32KB,leaf_value_max=1MB"
                 if (options.Get ("collection-wt-allocation") == "2x")
-                {   
-                    storageEngineDoc["wiredTiger"]["configString"] += ",allocation_size=8KB,leaf_page_max=64KB,internal_page_max=8KB";
+                {
+                    config.RemoveAll (i => 
+                        i.StartsWith ("allocation_size=", StringComparison.OrdinalIgnoreCase) ||
+                        i.StartsWith ("leaf_page_max=", StringComparison.OrdinalIgnoreCase) ||
+                        i.StartsWith ("internal_page_max=", StringComparison.OrdinalIgnoreCase));
+                    config.Add ("allocation_size=8KB");
+                    config.Add ("leaf_page_max=64KB");
+                    config.Add ("internal_page_max=8KB");
                 }
                 else if (options.Get ("collection-wt-allocation") == "4x")
                 {
-                    storageEngineDoc["wiredTiger"]["configString"] += ",allocation_size=16KB,leaf_page_max=64KB,internal_page_max=16KB";
+                    config.RemoveAll (i =>
+                        i.StartsWith ("allocation_size=", StringComparison.OrdinalIgnoreCase) ||
+                        i.StartsWith ("leaf_page_max=", StringComparison.OrdinalIgnoreCase) ||
+                        i.StartsWith ("internal_page_max=", StringComparison.OrdinalIgnoreCase));
+                    config.Add ("allocation_size=16KB");
+                    config.Add ("leaf_page_max=64KB");
+                    config.Add ("internal_page_max=16KB");
                 }
                 else if (options.Get ("collection-wt-allocation") == "8x")
                 {
-                    storageEngineDoc["wiredTiger"]["configString"] += ",allocation_size=32KB,leaf_page_max=128KB,internal_page_max=32KB";
+                    config.RemoveAll (i =>
+                        i.StartsWith ("allocation_size=", StringComparison.OrdinalIgnoreCase) ||
+                        i.StartsWith ("leaf_page_max=", StringComparison.OrdinalIgnoreCase) ||
+                        i.StartsWith ("internal_page_max=", StringComparison.OrdinalIgnoreCase));
+                    config.Add ("allocation_size=32KB");
+                    config.Add ("leaf_page_max=128KB");
+                    config.Add ("internal_page_max=32KB");
                 }
             }
 
-            if (storageEngineDoc != null)
-            {                
-                storageEngineDoc["wiredTiger"]["configString"] = storageEngineDoc["wiredTiger"]["configString"].ToString ().Trim (' ', ',');
-            }
-            else
+            // apply configuration
+            if (config.Count > 0)
             {
-                // if there is no special option, there is no need to create collection...
-                return;
+                try
+                {
+                    var storageEngineDoc = new BsonDocument ("wiredTiger", new BsonDocument ("configString", String.Join (",", config)));
+                    targetCollection.Database.CreateCollection (targetCollection.Name, CollectionOptions.SetStorageEngineOptions (storageEngineDoc));                
+                }
+                catch (Exception ex)
+                {
+                    NLog.LogManager.GetLogger ("CreateCollection").Error (ex);
+                }
             }
-
-            try
-            {
-                targetCollection.Database.CreateCollection (targetCollection.Name, CollectionOptions.SetStorageEngineOptions (storageEngineDoc));                
-            }
-            catch (Exception ex)
-            {
-                NLog.LogManager.GetLogger ("CreateCollection").Error (ex);
-            }            
         }
 
         private static void CreateIndexes (MongoCollection<BsonDocument> sourceCollection, MongoCollection<BsonDocument> targetCollection, FlexibleOptions options)
