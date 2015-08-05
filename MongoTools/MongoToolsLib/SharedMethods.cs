@@ -31,7 +31,7 @@ namespace MongoToolsLib
 
                 BsonDocument last = null;
                 // Resets Counter
-                long count = 0;
+                long count = 0, lastCount = 0;
                 int loop = 0;
 
                 // Reaching Collections
@@ -150,6 +150,8 @@ namespace MongoToolsLib
                 // Local Buffer
                 List<BsonDocument> buffer = new List<BsonDocument> (insertBatchSize);                
 
+                var timer = System.Diagnostics.Stopwatch.StartNew ();
+
                 // Running Copy
                 foreach (BsonDocument i in SafeQuery (sourceCollection, "_id", null, last))
                 {
@@ -166,7 +168,9 @@ namespace MongoToolsLib
                             targetCollection.SafeInsertBatch (buffer, 3, true, true);
                             if (loop++ % 150 == 0)
                             {
-                                logger.Debug ("{0}.{1} - batch size: {2}, progress: {3} / {4} ({5}) ", sourceDatabase.Name, sourceCollection.Name, insertBatchSize, count, total, ((double)count / total).ToString ("0.0%"));
+                                logger.Debug ("{0}.{1} - batch size: {2}, progress: {3} / {4} ({5}), rate: {6}/h ", sourceDatabase.Name, sourceCollection.Name, insertBatchSize, count.ToString ("N0"), total.ToString ("N0"), ((double)count / total).ToString ("0.0%"), ((count - lastCount) / timer.Elapsed.TotalHours).ToString ("N1"));
+                                lastCount = count;
+                                timer.Restart ();
                             }
                             if (waitTime > -1)
                             {
