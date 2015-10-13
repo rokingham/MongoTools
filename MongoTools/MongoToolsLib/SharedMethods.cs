@@ -31,7 +31,7 @@ namespace MongoToolsLib
 
                 BsonDocument last = null;
                 // Resets Counter
-                long count = 0, lastCount = 0;
+                long count = 0, lastCount = 0, initialCount = 0;
                 int loop = 0;
 
                 // Reaching Collections
@@ -106,6 +106,7 @@ namespace MongoToolsLib
                         {
                             logger.Debug ("{0}.{1} - Resuming collection copy, last _id: {2}", sourceDatabase.Name, sourceCollectionName, last["_id"]);
                             count = targetCount;
+                            lastCount = targetCount;
                         }
                     }
 
@@ -147,10 +148,16 @@ namespace MongoToolsLib
                 // check for lazy copy options
                 int waitTime = options.Get ("lazy-wait", -1);
 
+                // processing thread
+                var queue = new SimpleHelpers.ParallelTasks<List<BsonDocument>> (Math.Max (options.Get ("insert-threads", 1), 1), (b) => ExecuteBulkOperation (b, targetCollection));
+
                 // Local Buffer
-                List<BsonDocument> buffer = new List<BsonDocument> (insertBatchSize);                
+                SimpleHelpers.ObjectPool<List<BsonDocument>>.DefaultInstanceFactory = () => new List<BsonDocument> (insertBatchSize);
+                List<BsonDocument> buffer = SimpleHelpers.ObjectPool<List<BsonDocument>>.Get ();
 
                 var timer = System.Diagnostics.Stopwatch.StartNew ();
+                var timer2 = System.Diagnostics.Stopwatch.StartNew ();
+                initialCount = count;
 
                 // Running Copy
                 foreach (BsonDocument i in SafeQuery (sourceCollection, "_id", null, last))
@@ -163,45 +170,29 @@ namespace MongoToolsLib
                     // Dumping data to database every 'X' records
                     if (buffer.Count >= insertBatchSize)
                     {
-                        try
+                        queue.AddTask (buffer);
+                        buffer = SimpleHelpers.ObjectPool<List<BsonDocument>>.Get ();
+
+                        if (loop++ % 10 == 0 && timer.Elapsed.TotalSeconds > 55)
                         {
-                            targetCollection.SafeInsertBatch (buffer, 3, true, true);
-                            if (loop++ % 150 == 0)
-                            {
-                                logger.Debug ("{0}.{1} - batch size: {2}, progress: {3} / {4} ({5}), rate: {6}/h ", sourceDatabase.Name, sourceCollection.Name, insertBatchSize, count.ToString ("N0"), total.ToString ("N0"), ((double)count / total).ToString ("0.0%"), ((count - lastCount) / timer.Elapsed.TotalHours).ToString ("N1"));
-                                lastCount = count;
-                                timer.Restart ();
-                            }
-                            if (waitTime > -1)
-                            {
-                                System.Threading.Thread.Sleep (waitTime);
-                            }
+                            logger.Debug ("{0}.{1} - batch size: {2}, progress: {3} / {4} ({5}), rate: {6}/h, avg-rate: {7}/h ", sourceDatabase.Name, sourceCollection.Name, insertBatchSize, count.ToString ("N0"), total.ToString ("N0"), ((double)count / total).ToString ("0.0%"), ((count - lastCount) / timer.Elapsed.TotalHours).ToString ("N1"), ((count - initialCount) / timer2.Elapsed.TotalHours).ToString ("N1"));
+                            lastCount = count;
+                            timer.Restart ();
                         }
-                        catch (Exception ex)
+                        if (waitTime > -1)
                         {
-                            logger.Error (ex);
-                            System.Threading.Thread.Sleep (1000);
-                            // try again, but whithout try catch to hide the exception this time...
-                            targetCollection.SafeInsertBatch (buffer, 3, true, true);
+                            System.Threading.Thread.Sleep (waitTime);
                         }
-                        buffer.Clear ();
                     }
                 }
 
                 // Copying Remaining of Local Buffer
                 if (buffer.Count > 0)
                 {
-                    try
-                    {
-                        targetCollection.SafeInsertBatch (buffer, 3, true, true);
-                        logger.Debug ("{0}.{1} - batch size: {2}, progress: {3} / {4} ({5}) ", sourceDatabase.Name, sourceCollection.Name, insertBatchSize, count, total, ((double)count / total).ToString ("0.0%"));
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.Error (ex);
-                    }
-                    buffer.Clear ();
+                    queue.AddTask (buffer);
+                    buffer = null;
                 }
+                queue.CloseAndWait ();  
 
                 // Checkign for the need to copy indexes aswell
                 if (copyIndexes && !options.Get ("copy-indexes-before", false))
@@ -216,6 +207,29 @@ namespace MongoToolsLib
                 logger.Error (ex, "{0}.{1} - Error copying collection ", sourceDatabase.Name, sourceCollectionName ?? "");
                 return;
             }
+        }
+
+        private static void ExecuteBulkOperation (List<BsonDocument> buffer, MongoCollection<BsonDocument> targetCollection)
+        {
+            try
+            { 
+                targetCollection.SafeInsertBatch (buffer, 3, true, true);                
+            }
+            catch (Exception ex)
+            {
+                NLog.LogManager.GetLogger ("ExecuteBulkOperation").Error (ex);
+                System.Threading.Thread.Sleep (2500);
+                // try again, but whithout try catch to hide the exception this time...
+                targetCollection.SafeInsertBatch (buffer, 3, true, true);
+            }
+            buffer.Clear ();
+            SimpleHelpers.ObjectPool<List<BsonDocument>>.Put (buffer);
+        }
+
+        private static void FireAndForget (MongoCollection<BsonDocument> targetCollection, List<BsonDocument> buffer)
+        {
+            var l = buffer.ToList ();
+            Task.Run (() => targetCollection.SafeInsertBatch (l, 3, false, true));
         }
 
         private static bool HasCollectionCreationOptions (FlexibleOptions options)

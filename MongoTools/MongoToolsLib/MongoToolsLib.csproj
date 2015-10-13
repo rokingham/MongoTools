@@ -68,6 +68,7 @@
     <Compile Include="SimpleHelpers\ConsoleUtils.cs" />
     <Compile Include="SimpleHelpers\FileEncoding.cs" />
     <Compile Include="SimpleHelpers\FlexibleOptions.cs" />
+    <Compile Include="SimpleHelpers\ObjectPool.cs" />
     <Compile Include="SimpleHelpers\ParallelTasks.cs" />
   </ItemGroup>
   <ItemGroup>

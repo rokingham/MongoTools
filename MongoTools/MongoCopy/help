@@ -43,6 +43,8 @@ Note: parameters are case insensitive
 	-collection-wt-allocation : wiredTiger configuration option to increase page allocation size for this collection. Values: "2x", "4x", "8x".
 	-collection-wt-configString : full wiredTiger configuration string to be passed as "wiredTiger.configString" parameter in the collection creation. 	
 
+	-insert-threads: number of threads used for insert batch per collection. Default to 1.
+
 Mono example:
 
 	mono MongoCopy.exe -copy-indexes -threads 2 -source "mongodb://user:psw@127.0.0.1/admin" -target "mongodb://user:psw@new.server.com:27017/admin" -sourceDatabase testDb -collections "test_*"
