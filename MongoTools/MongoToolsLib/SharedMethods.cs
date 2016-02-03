@@ -94,49 +94,6 @@ namespace MongoToolsLib
 
                 var total = sourceCollection.Count ();
 
-                // Running Copy
-                foreach (BsonDocument i in SafeQuery (sourceCollection, "_id"))
-                {
-                    // Feedback and Local Buffer
-                    count++;
-
-                    buffer.Add (i);
-
-                    // Dumping data to database every 'X' records
-                    if (buffer.Count >= insertBatchSize)
-                    {
-                        try
-                        {
-                            targetCollection.SafeInsertBatch (buffer, 3, true, true);
-                            if (loop++ % 150 == 0)
-                            {
-                                logger.Debug ("{0}.{1} - batch size: {2}, progress: {3} / {4} ({5}) ", sourceDatabase.Name, sourceCollection.Name, insertBatchSize, count, total, ((double)count / total).ToString ("0.0%"));
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            logger.Error (ex);
-                            System.Threading.Thread.Sleep (100);
-                        }
-                        buffer.Clear ();
-                    }
-                }
-
-                // Copying Remaining of Local Buffer
-                if (buffer.Count > 0)
-                {
-                    try
-                    {
-                        targetCollection.SafeInsertBatch (buffer, 3, true, true);
-                        logger.Debug ("{0}.{1} - batch size: {2}, progress: {3} / {4} ({5}) ", sourceDatabase.Name, sourceCollection.Name, insertBatchSize, count, total, ((double)count / total).ToString ("0.0%"));
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.Error (ex);
-                    }
-                    buffer.Clear ();
-                }
-
                 // Checkign for the need to copy indexes aswell
                 if (copyIndexes)
                 {
@@ -180,26 +137,70 @@ namespace MongoToolsLib
                                     {
                                         if (targetCollection.IndexExists (idx.Name))
                                             break;
-                                    } catch {}
+                                    }
+                                    catch { }
                                 }
                             }
                             else
                             {
-                                logger.Error (ex, "{0}.{1} - Error creating index {2}" + idx.Name);                                
+                                logger.Error (ex, "{0}.{1} - Error creating index {2}" + idx.Name);
                             }
                             logger.Warn ("{0}.{1} - Index details: {2}", sourceDatabase.Name, sourceCollection.Name, idx.ToJson ());
-                        }                        
+                        }
                     }
                     logger.Debug ("{0}.{1} - Index creation completed", sourceDatabase.Name, sourceCollection);
                 }
 
-                logger.Info ("{0}.{1} - Collection copy completed.", sourceDatabase.Name, sourceCollectionName);
+                // Running Copy
+                foreach (BsonDocument i in SafeQuery (sourceCollection, "_id"))
+                {
+                    // Feedback and Local Buffer
+                    count++;
+
+                    buffer.Add (i);
+
+                    // Dumping data to database every 'X' records
+                    if (buffer.Count >= insertBatchSize)
+                    {
+                        try
+                        {
+                            targetCollection.SafeInsertBatch (buffer, 3, true, true);
+                            if (loop++ % 150 == 0)
+                            {
+                                logger.Debug ("{0}.{1} - batch size: {2}, progress: {3} / {4} ({5}) ", sourceDatabase.Name, sourceCollection.Name, insertBatchSize, count, total, ((double)count / total).ToString ("0.0%"));
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.Error (ex);
+                            System.Threading.Thread.Sleep (100);
+                        }
+                        buffer.Clear ();
+                    }
+                }
+
+                // Copying Remaining of Local Buffer
+                if (buffer.Count > 0)
+                {
+                    try
+                    {
+                        targetCollection.SafeInsertBatch (buffer, 3, true, true);
+                        logger.Debug ("{0}.{1} - batch size: {2}, progress: {3} / {4} ({5}) ", sourceDatabase.Name, sourceCollection.Name, insertBatchSize, count, total, ((double)count / total).ToString ("0.0%"));
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Error (ex);
+                    }
+                    buffer.Clear ();
+                }
             }
             catch (Exception ex)
             {
                 logger.Error (ex, "{0}.{1} - Error copying collection ", sourceDatabase.Name, sourceCollectionName ?? "");
                 return;
             }
+
+            logger.Info ("{0}.{1} - Collection copy completed.", sourceDatabase.Name, sourceCollectionName);
         }
 
         private static IEnumerable<BsonDocument> SafeQuery (MongoCollection<BsonDocument> sourceCollection, string indexField = "_id", IMongoQuery query = null)

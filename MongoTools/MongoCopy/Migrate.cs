@@ -1,29 +1,4 @@
-﻿/*
- *  Parameters:
- *   -h : Shows Help
- *   
- *   -full : Indicates that the whole database should be copied (This is exclusive with -collections and -collections-mask)
- *   
- *   -collections : Indicates that a list of collections to be copied will be received (This is exclusive with -full and -collections-mask)
- *   
- *   -collections-mask : Indicates that a mask will be received to match the collections names that should be copied (This is exclusive with -full and -collections)
- * 
- *   -copy-indexes : Indicates whether the collection indexes must be copied aswell or not (it not received, the indexes won't be copied)
- *   
- *   -drop-collections : If received will force each TARGET collection to be droped prior to being updated. This should be used when you want the target collection to be
- *                       empty before the copy operation kicks in
- * 
- *  Examples of usage:
- *      Copying Full Database                                                 : Migrate.exe -full
- *      Copying Full Database, droping the target before:                     : Migrate.exe -full -drop-collections
- *      Copying Full Database with Indexes                                    : Migrate.exe -full -copy-indexes
- *      Copying a List of Collections (with indexes)                          : Migrate.exe -collections "collection1" "collection2" "awesomeCollection" -copy-indexes
- *      Copying a List of Collections (with indexes), droping each one before : Migrate.exe -collections "collection1" "collection2" "awesomeCollection" -copy-indexes -drop-collections
- *      Copying All Collections that matches the mask "Products_Collection"   : Migrate.exe -collections-mask "Products_Collection"
- * 
- */
-
-using MongoToolsLib;
+﻿using MongoToolsLib;
 using MongoDB.Driver;
 using MongoToolsLib.SimpleHelpers;
 using NLog;
@@ -127,10 +102,10 @@ namespace MongoCopy
         private static void ParseArguments (FlexibleOptions options)
         {
             // parse arguments
-            _sourceUri = options["source"];
-            _sourceServer = options["sourceServer"];
-            _sourceUsername = options["sourceUsername"];
-            _sourcePassword = options["sourcePassword"];
+            _sourceUri          = options["source"];
+            _sourceServer       = options["sourceServer"];
+            _sourceUsername     = options["sourceUsername"];
+            _sourcePassword     = options["sourcePassword"];
             _sourceAuthDatabase = options.Get ("sourceAuthDatabase", options["authDatabaseNameSource"]);
 
             _targetUri = options["target"];
