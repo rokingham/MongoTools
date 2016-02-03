@@ -94,7 +94,7 @@ namespace MongoToolsLib
 
                 var total = sourceCollection.Count ();
 
-                // Checkign for the need to copy indexes aswell
+                // Checking for the need to copy indexes aswell
                 if (copyIndexes)
                 {
                     logger.Debug ("{0}.{1} - Start index creation", sourceDatabase.Name, sourceCollection.Name);
