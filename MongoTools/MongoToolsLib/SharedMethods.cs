@@ -52,8 +52,7 @@ namespace MongoToolsLib
                     // since this is a special type of collection, we will skip it
                     if (sourceCollection.IsCapped ())
                     {
-                        logger.Warn ("{0}.{1} - Skiping capped collection (feature not implemented)", sourceDatabase.Name, sourceCollectionName);
-                        return;
+                        logger.Warn ("{0}.{1} - Found capped collection (feature not implemented) - Make sure to convert it manually after", sourceDatabase.Name, sourceCollectionName);
                     }
 
                     // check if batch size is set to auto
