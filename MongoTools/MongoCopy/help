@@ -1,5 +1,6 @@
 ﻿##########################################
-List of Parameters
+List of Parameters 
+Note: parameters are case insensitive
 
 	-h | -help : Shows Help
 	-logLevel : change the verbosity of log messages written to the logfile. Defaults to Info. Values = [Trace, Debug, Info, Warn, Error, Fatal]
@@ -20,15 +21,27 @@ List of Parameters
 	-targetUsername : target MongoDb server credentials.
 	-targetPassword : target MongoDb server credentials.
 	
-	-sourceDatabase : name of the database.	Format: "db1,db2,db3,db_2015*".
+	-databases : name of the database. Alias "sourceDatabase". Format: "db1,db2,db3,db_2015*". Alternative format: "source1=target1,source2=target2,source3*"
 	-targetDatabase : name of the database. Format: "db1,db2,db3,db_2015*". Defaults to sourceDatabase name.  
+	
+	-collections : If received this will be used instead of full database copy. Format: "col1,col2,col3*". Alternative format: "source1=target1,source2=target2,source3*".
 
-	-insertBatchSize : Size of the insert batch operation. Defaults to -1 (auto).
+	-batch-size : Size of the insert batch operation. Defaults to -1 (auto). Alias: "insertBatchSize"
 	-threads : number of concurrent collections copy. One collection per thread. Defaults to 1.
 	-copy-indexes : Indexes will be copied if this is received. Defaults to true.
-	-drop-collections: If received, will force drop into each collection before copying the data
-	
-	-collections : If received this will be used instead of full database copy. Format: "col1,col2,col3*"
+	-copy-indexes-before : Indexes will be copied before records copy. Defaults to false.
+	-drop-collections : If received, will force drop into each collection before copying the data
+	-skip-existing : If the target database already have the collection and this collection has any document, skipt it.
+	-resume : try to resume operation by recovering last _id in target collection. Defaults to false.
+	-if-smaller : only copies a collection if source collection has more records than target collection. Defaults to false.
+	-lazy-wait : wait between each insert batch operation. Time in milliseconds.
+
+	-indexes-background : forces all copied indexes to have the background flag.
+	-indexes-sparse : forces all copied indexes to have the sparse flag.
+
+	-collection-wt-block-compressor : wiredTiger configuration option for collection block compressor. Values: "", "zlib", "snappy".
+	-collection-wt-allocation : wiredTiger configuration option to increase page allocation size for this collection. Values: "2x", "4x", "8x".
+	-collection-wt-configString : full wiredTiger configuration string to be passed as "wiredTiger.configString" parameter in the collection creation. 	
 
 Mono example:
 
