@@ -99,9 +99,29 @@ namespace MongoToolsLib
                         return;
                     }
 
-                    if (options.Get ("resume", false))
+                    // check resume option
+                    if (options.HasOption ("resume"))
                     {
-                        last = targetCollection.Find (null).SetSortOrder (SortBy.Descending ("_id")).SetFields ("_id").SetLimit (1).FirstOrDefault ();
+                        var txt = options.Get<string> ("resume", "");
+                        if (txt.ToLowerInvariant () != "false")
+                        {
+                            // if key is not provided, try get value from target collection (as documented)
+                            if (String.IsNullOrWhiteSpace (txt) || txt.ToLowerInvariant () == "true")
+                            {
+                                last = targetCollection.Find (null).SetSortOrder (SortBy.Descending ("_id")).SetFields ("_id").SetLimit (1).FirstOrDefault ();                                
+                            }
+                            // 
+                            else
+                            {
+                                logger.Debug ("Resuming last checkpoint: " + txt);
+                                ObjectId id;
+                                if (options.Get ("mongoDbIdType").ToLowerInvariant () != "string" && ObjectId.TryParse (txt, out id))
+                                    last = new BsonDocument ().Add ("_id", id);
+                                else
+                                    last = new BsonDocument ().Add ("_id", txt);
+                            }
+                        }
+
                         if (last != null)
                         {
                             logger.Debug ("{0}.{1} - Resuming collection copy, last _id: {2}", sourceDatabase.Name, sourceCollectionName, last["_id"]);
@@ -109,6 +129,7 @@ namespace MongoToolsLib
                             lastCount = targetCount;
                         }
                     }
+
 
                     if (options.Get ("if-smaller", false) && targetCount >= total)
                     {
