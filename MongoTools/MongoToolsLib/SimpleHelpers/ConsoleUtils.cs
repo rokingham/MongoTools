@@ -48,11 +48,36 @@ namespace MongoToolsLib.SimpleHelpers
 
         public static FlexibleOptions ProgramOptions { get; private set; }
 
-        public static FlexibleOptions Initialize (string[] args, bool thrownOnError)
+        private static InitializationOptions InitOptions = null;
+
+        public class InitializationOptions
         {
+            public bool overrideNLogFileConfiguration = true;
+            public List<NLog.Targets.Target> targets;
+
+            public InitializationOptions OverrideNLogFileConfiguration (bool Override)
+            {
+                overrideNLogFileConfiguration = Override;
+                return this;
+            }
+
+            public InitializationOptions AddNLogTarget (params NLog.Targets.Target[] Targets)
+            {
+                if (Targets != null)
+                {
+                    if (targets == null)
+                        targets = new List<NLog.Targets.Target> ();
+                    targets.AddRange (Targets);
+                }
+                return this;
+            }
+        }
+
+        public static FlexibleOptions Initialize (string[] args, bool thrownOnError, InitializationOptions options = null)
+        {
+            InitOptions = options;
             DefaultProgramInitialization ();
 
-            InitializeLog ();
 
             ProgramOptions = CheckCommandLineParams (args, thrownOnError);
 
@@ -66,12 +91,12 @@ namespace MongoToolsLib.SimpleHelpers
             if (!Console.IsOutputRedirected)
             {
                 ConsoleUtils.DisplayHeader (
-                    typeof(ConsoleUtils).Namespace.Replace(".SimpleHelpers", ""),
+                    typeof(ConsoleUtils).Namespace.Replace (".SimpleHelpers", ""),
                     "options: " + (ProgramOptions == null ? "none" : "\n#    " + String.Join ("\n#    ", ProgramOptions.Options.Select (i => i.Key + "=" + i.Value))));
             }
             else
             {
-                var logger = LogManager.GetCurrentClassLogger ();
+                var logger = GetLogger ();
                 if (logger.IsDebugEnabled)
                 {
                     logger.Debug ("options: " + (ProgramOptions == null ? "none" : "\n#    " + String.Join ("\n#    ", ProgramOptions.Options.Select (i => i.Key + "=" + i.Value))));
@@ -103,31 +128,40 @@ namespace MongoToolsLib.SimpleHelpers
         static string _logFileName;
         static string _logLevel;
 
+        private static Logger GetLogger ()
+        {
+            if (_logFileName == null)
+                InitializeLog (null, null, InitOptions);
+            return LogManager.GetCurrentClassLogger ();
+        }
         /// <summary>
         /// Log initialization.
         /// </summary>
-        internal static void InitializeLog (string logFileName = null, string logLevel = null)
+        internal static void InitializeLog (string logFileName = null, string logLevel = null, InitializationOptions options = null)
         {
-            // default parameters initialization from config file
-            if (String.IsNullOrEmpty (logFileName))
-                logFileName = System.Configuration.ConfigurationManager.AppSettings["logFilename"];
-			if (String.IsNullOrEmpty (logFileName))
-                logFileName = ("${basedir}/log/" + typeof (ConsoleUtils).Namespace.Replace(".SimpleHelpers", "") + ".log");
-            if (String.IsNullOrEmpty (logLevel))
-                logLevel = System.Configuration.ConfigurationManager.AppSettings["logLevel"] ?? "Info";
-
-            // check if log was initialized with same options
-            if (_logFileName == logFileName && _logLevel == logLevel) 
+            if (options != null && !options.overrideNLogFileConfiguration && LogManager.Configuration == null)
                 return;
 
-            // save current log configuration
-            _logFileName = logFileName;
-            _logLevel = logLevel;
+            // default parameters initialization from config file
+            if (String.IsNullOrEmpty (logFileName))
+                logFileName = _logFileName ?? System.Configuration.ConfigurationManager.AppSettings["logFilename"];
+			if (String.IsNullOrEmpty (logFileName))
+                logFileName = ("${basedir}/log/" + typeof (ConsoleUtils).Namespace.Replace (".SimpleHelpers", "") + ".log");
+            if (String.IsNullOrEmpty (logLevel))
+                logLevel = _logLevel ?? (System.Configuration.ConfigurationManager.AppSettings["logLevel"] ?? "Info");
+
+            // check if log was initialized with same options
+            if (_logFileName == logFileName && _logLevel == logLevel)
+                return;
 
             // try to parse loglevel
             LogLevel currentLogLevel;
             try { currentLogLevel = LogLevel.FromString (logLevel); }
             catch { currentLogLevel = LogLevel.Info; }
+
+            // save current log configuration
+            _logFileName = logFileName;
+            _logLevel = currentLogLevel.ToString ();
 
             // prepare log configuration
             var config = new NLog.Config.LoggingConfiguration ();
@@ -149,12 +183,14 @@ namespace MongoToolsLib.SimpleHelpers
             fileTarget.FileName = logFileName;
             fileTarget.Layout = "${longdate}\t${callsite}\t${level}\t\"${message}${onexception: \t [Exception] ${exception:format=tostring}}\"";
             fileTarget.ConcurrentWrites = true;
+			fileTarget.ConcurrentWriteAttemptDelay = 10;
+            fileTarget.ConcurrentWriteAttempts = 8;
             fileTarget.AutoFlush = true;
             fileTarget.KeepFileOpen = true;
             fileTarget.DeleteOldFileOnStartup = false;
-            fileTarget.ArchiveAboveSize = 2 * 1024 * 1024;  // 2 Mb
+            fileTarget.ArchiveAboveSize = 4 * 1024 * 1024;  // 4 Mb
             fileTarget.MaxArchiveFiles = 10;
-            fileTarget.ArchiveNumbering = NLog.Targets.ArchiveNumberingMode.Date;
+            fileTarget.ArchiveNumbering = NLog.Targets.ArchiveNumberingMode.DateAndSequence;
             fileTarget.ArchiveDateFormat = "yyyyMMdd_HHmmss";
 
             // set file output to be async (commented out since doesn't work on mono)
@@ -165,6 +201,16 @@ namespace MongoToolsLib.SimpleHelpers
             // configure log from configuration file
             var rule2 = new NLog.Config.LoggingRule ("*", currentLogLevel, fileTarget);
             config.LoggingRules.Add (rule2);
+
+            // External Log Target
+            if (options != null && options.targets != null)
+            {
+                foreach (var t in options.targets)
+                {
+                    config.AddTarget (t);
+                    config.LoggingRules.Add (new NLog.Config.LoggingRule ("*", currentLogLevel, t));
+                }
+            }
 
             // set configuration options
             LogManager.Configuration = config;
@@ -179,11 +225,12 @@ namespace MongoToolsLib.SimpleHelpers
             System.Threading.Thread.Sleep (0);
             // log error code and close log
             if (exitCode == 0)
-                LogManager.GetCurrentClassLogger ().Info ("ExitCode " + exitCode.ToString ());
+                GetLogger ().Debug ("ExitCode " + exitCode.ToString ());
             else
-                LogManager.GetCurrentClassLogger ().Error ("ExitCode " + exitCode.ToString ());
+                GetLogger ().Error ("ExitCode " + exitCode.ToString ());
             LogManager.Flush ();
-            // force garbage collector run
+            System.Threading.Thread.Sleep (0);
+			// force garbage collector run
             // usefull for clearing COM interfaces or any other similar resource
             GC.Collect ();
             GC.WaitForPendingFinalizers ();
@@ -191,7 +238,7 @@ namespace MongoToolsLib.SimpleHelpers
 
             // set exit code and exit
             System.Environment.ExitCode = exitCode;
-            if (exitApplication) 
+            if (exitApplication)
                 System.Environment.Exit (exitCode);
         }
 
@@ -225,7 +272,7 @@ namespace MongoToolsLib.SimpleHelpers
                 {
                     if (thrownOnError)
                         throw;
-                    LogManager.GetCurrentClassLogger ().Warn (appSettingsEx);
+                    GetLogger ().Warn (appSettingsEx);
                 }
 
                 // parse console arguments
@@ -245,16 +292,19 @@ namespace MongoToolsLib.SimpleHelpers
                 {
                     foreach (var file in externalConfigFile.Trim(' ', '\'', '"', '[', ']').Split (',', ';'))
                     {
-                        LogManager.GetCurrentClassLogger ().Info ("Loading configuration file from {0} ...", externalConfigFile);
+                        GetLogger ().Debug ("Loading configuration file from {0} ...", externalConfigFile);
                         externalLoadedOptions = FlexibleOptions.Merge (externalLoadedOptions, LoadExtenalConfigurationFile (file.Trim (' ', '\'', '"'), configAbortOnError));
                     }
                 }
             }
             catch (Exception ex)
             {
+                // initialize log before dealing with exceptions
+                if (mergedOptions != null)
+                    InitializeLog (mergedOptions.Get ("logFilename"), mergedOptions.Get ("logLevel", "Info"), InitOptions);
                 if (thrownOnError)
                     throw;
-                LogManager.GetCurrentClassLogger ().Error (ex);
+                GetLogger ().Error (ex);
             }
 
             // merge options with the following priority:
@@ -264,7 +314,7 @@ namespace MongoToolsLib.SimpleHelpers
             mergedOptions = FlexibleOptions.Merge (mergedOptions, externalLoadedOptions, argsOptions);
 
             // reinitialize log options if different from local configuration file
-            InitializeLog (mergedOptions.Get ("logFilename"), mergedOptions.Get ("logLevel", "Info"));
+            InitializeLog (mergedOptions.Get ("logFilename"), mergedOptions.Get ("logLevel", "Info"), InitOptions);
 
             // return final merged options
             ProgramOptions = mergedOptions;
@@ -291,7 +341,7 @@ namespace MongoToolsLib.SimpleHelpers
                         argsOptions.Set (arg.Substring (0, p).Trim ().TrimStart ('-', '/'), arg.Substring (p + 1).Trim ());
                         lastTag = null;
                         openTag = false;
-                    }                    
+                    }
                     // search for tag stating with special character
                     else if (hasStartingMarker)
                     {
@@ -304,7 +354,7 @@ namespace MongoToolsLib.SimpleHelpers
                     {
                         argsOptions.Set (lastTag, arg.Trim ());
                         openTag = false;
-                    }                    
+                    }
                 }
             }
             return argsOptions;
@@ -334,32 +384,25 @@ namespace MongoToolsLib.SimpleHelpers
                 {
                     if (thrownOnError)
                         throw;
-                    LogManager.GetCurrentClassLogger ().Error (ex);
+                    GetLogger ().Error (ex);
                     return new FlexibleOptions ();
                 }
-            }            
+            }
         }
 
         private static FlexibleOptions LoadFileSystemConfigurationFile (string filePath, bool thrownOnError)
         {
-            using (WebClient client = new WebClient ())
+            try
             {
-                try
-                {
-                    string text;
-                    using (var file = new System.IO.StreamReader (filePath, Encoding.GetEncoding ("ISO-8859-1"), true))
-                    {
-                        text = file.ReadToEnd ();
-                    }
-                    return parseFile (client.DownloadString (filePath));                    
-                }
-                catch (Exception ex)
-                {
-                    if (thrownOnError)
-                        throw;
-                    LogManager.GetCurrentClassLogger ().Error (ex);
-                    return new FlexibleOptions ();
-                }
+            	string text = ReadFileAllText (filePath);
+            	return parseFile (text);
+            }
+            catch (Exception ex)
+            {
+                if (thrownOnError)
+                    throw;
+                GetLogger ().Error (ex);
+                return new FlexibleOptions ();
             }
         }
 
@@ -368,7 +411,7 @@ namespace MongoToolsLib.SimpleHelpers
             var options = new FlexibleOptions ();
 
             // detect xml
-            if (content.TrimStart().StartsWith ("<"))
+            if (content.TrimStart ().StartsWith ("<"))
             {
                 var xmlDoc = System.Xml.Linq.XDocument.Parse (content);
                 var root = xmlDoc.Descendants ("config").FirstOrDefault ();
@@ -416,7 +459,7 @@ namespace MongoToolsLib.SimpleHelpers
             // display message parameter
             if (isError)
             {
-                Console.Error.WriteLine (message);                
+                Console.Error.WriteLine (message);
             }
             else
             {

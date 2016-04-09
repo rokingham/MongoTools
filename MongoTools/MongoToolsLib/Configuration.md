@@ -1,4 +1,4 @@
-# MongoDB
+# MongoToolsLib
 
 Application description
 
@@ -32,7 +32,7 @@ Each parameter can overwrite the default value or the value in the app.config by
 Example
 
 ```
-  MongoDB.exe --logLevel="Info" --logFilename="log.txt"
+  MongoToolsLib.exe --logLevel="Info" --logFilename="log.txt"
 ```
 
 **Note:** The help can also be summoned by passing the argument `--help`
@@ -60,7 +60,7 @@ External file format
 Example
 
 ```
-  MongoDB.exe --config="Info" --logFilename="log.txt"
+  MongoToolsLib.exe --config="Info" --logFilename="log.txt"
 ```
 
 **Note:** The help can also be summoned by passing the argument `--help`
