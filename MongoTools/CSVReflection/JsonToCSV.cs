@@ -71,6 +71,14 @@ namespace CSVReflection
                     // Retrieving value of this field. (E.G: Score.Total will return the value of the "Total" field, within the "Score" one)
                     auxBsonDoc = ReachInnerDocument (bsonDocument, fieldName);
 
+                    // Error Reaching Inner Document
+                    if (auxBsonDoc == null)
+                    {
+                        // Writing only the delimiter
+                        fieldValues.Add(String.Empty);
+                        continue;
+                    }
+
                     // Changing the "Field.Name" value to it's botton one
                     fieldName = fieldName.Split ('.').Last ();
                 }
